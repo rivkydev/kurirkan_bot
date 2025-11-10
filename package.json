@@ -1,4 +1,3 @@
-
 {
   "name": "kurir-kan-whatsapp-bot",
   "version": "1.0.0",
@@ -8,7 +7,10 @@
     "start": "node app.js",
     "dev": "nodemon app.js",
     "register-driver": "node scripts/registerDriver.js",
-    "list-drivers": "node scripts/listDrivers.js"
+    "list-drivers": "node scripts/listDrivers.js",
+    "cleanup": "node scripts/cleanup.js",
+    "backup": "node scripts/backup.js",
+    "daily-report": "node scripts/dailyReport.js"
   },
   "keywords": [
     "whatsapp",

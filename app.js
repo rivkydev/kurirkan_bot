@@ -1,6 +1,8 @@
 // ============================================
-// FILE: app.js (MAIN APPLICATION)
+// FILE: app.js (MAIN APPLICATION - FIXED)
 // ============================================
+
+require('dotenv').config();
 
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
