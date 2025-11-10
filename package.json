@@ -1,0 +1,34 @@
+
+{
+  "name": "kurir-kan-whatsapp-bot",
+  "version": "1.0.0",
+  "description": "Bot WhatsApp untuk layanan kurir dengan sistem orderan otomatis",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js",
+    "dev": "nodemon app.js",
+    "register-driver": "node scripts/registerDriver.js",
+    "list-drivers": "node scripts/listDrivers.js"
+  },
+  "keywords": [
+    "whatsapp",
+    "bot",
+    "kurir",
+    "delivery",
+    "order-management"
+  ],
+  "author": "Muhammad Rivky",
+  "license": "MIT",
+  "dependencies": {
+    "whatsapp-web.js": "^1.23.0",
+    "qrcode-terminal": "^0.12.0",
+    "mongoose": "^8.0.0",
+    "dotenv": "^16.3.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}

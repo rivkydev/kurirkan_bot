@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  mongodb:
+    image: mongo:6
+    container_name: kurir-kan-mongo
+    restart: always
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: your_password_here
+      MONGO_INITDB_DATABASE: kurir-kan
+
+  bot:
+    build: .
+    container_name: kurir-kan-bot
+    restart: always
+    depends_on:
+      - mongodb
+    environment:
+      - MONGO_URL=mongodb://admin:your_password_here@mongodb:27017/kurir-kan?authSource=admin
+      - NODE_ENV=production
+    volumes:
+      - ./.wwebjs_auth:/usr/src/app/.wwebjs_auth
+      - ./logs:/usr/src/app/logs
+      - ./backups:/usr/src/app/backups
+
+volumes:
+  mongodb_data:
