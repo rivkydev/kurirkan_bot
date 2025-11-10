@@ -1,48 +1,38 @@
 // ============================================
-// FILE: services/adminService.js - NEW
+// FILE: services/adminService.js (IN-MEMORY)
 // ============================================
 
-const config = require('../config/config');
+const storage = require('../storage/inMemoryStorage');
 const analyticsService = require('./analyticsService');
 const driverService = require('./driverService');
-const orderService = require('./orderService');
 const queueService = require('./queueService');
 const Formatter = require('../utils/formatter');
 
 class AdminService {
-  // Check if user is admin
   isAdmin(phone) {
     const normalizedPhone = phone.replace('@c.us', '').replace(/^0/, '62');
-    return config.admin.allowedNumbers.includes(normalizedPhone);
+    const adminNumbers = ['6285823358559']; // Sesuaikan dengan nomor admin Anda
+    return adminNumbers.includes(normalizedPhone);
   }
 
-  // Get real-time dashboard
   async getDashboard() {
-    const [
-      availableDrivers,
-      busyDrivers,
-      offDutyDrivers,
-      activeOrders,
-      queueSize,
-      todayStats
-    ] = await Promise.all([
-      driverService.getAvailableDrivers(),
-      this.getBusyDrivers(),
-      this.getOffDutyDrivers(),
-      orderService.getActiveOrdersCount(),
-      queueService.getQueueSize(),
-      analyticsService.getDailyStats()
-    ]);
+    const availableDrivers = driverService.getAvailableDrivers();
+    const allDrivers = storage.getAllDrivers();
+    const busyDrivers = allDrivers.filter(d => d.status === 'Busy');
+    const offDutyDrivers = allDrivers.filter(d => d.status === 'Off Duty');
+    const activeOrders = storage.getActiveOrders();
+    const queueSize = queueService.getQueueSize();
+    const todayStats = analyticsService.getDailyStats();
 
     return {
       drivers: {
         available: availableDrivers.length,
         busy: busyDrivers.length,
         offDuty: offDutyDrivers.length,
-        total: availableDrivers.length + busyDrivers.length + offDutyDrivers.length
+        total: allDrivers.length
       },
       orders: {
-        active: activeOrders,
+        active: activeOrders.length,
         queue: queueSize,
         today: todayStats.totalOrders,
         completed: todayStats.completedOrders,
@@ -52,7 +42,6 @@ class AdminService {
     };
   }
 
-  // Format dashboard for WhatsApp
   async formatDashboard() {
     const dashboard = await this.getDashboard();
     
@@ -81,21 +70,8 @@ class AdminService {
     return text;
   }
 
-  // Get busy drivers
-  async getBusyDrivers() {
-    const Driver = require('../models/Driver');
-    return await Driver.find({ status: 'Busy' });
-  }
-
-  // Get off duty drivers
-  async getOffDutyDrivers() {
-    const Driver = require('../models/Driver');
-    return await Driver.find({ status: 'Off Duty' });
-  }
-
-  // Get detailed driver list
   async getDetailedDriverList() {
-    const drivers = await driverService.getAllDriversStatus();
+    const drivers = driverService.getAllDriversStatus();
     
     let text = `👨‍💼 *DAFTAR LENGKAP DRIVER*\n\n`;
     
@@ -109,19 +85,18 @@ class AdminService {
     return text;
   }
 
-  // Get recent orders
   async getRecentOrders(limit = 10) {
-    const Order = require('../models/Order');
-    const orders = await Order.find()
-      .sort({ createdAt: -1 })
-      .limit(limit)
-      .populate('assignedDriver');
+    const allOrders = Array.from(storage.orders.values())
+      .sort((a, b) => b.createdAt - a.createdAt)
+      .slice(0, limit);
 
     let text = `📋 *${limit} ORDERAN TERAKHIR*\n\n`;
     
-    orders.forEach((order, idx) => {
+    allOrders.forEach((order, idx) => {
       const statusFormatted = Formatter.formatOrderStatus(order.status);
-      const driverName = order.assignedDriver ? order.assignedDriver.name : '-';
+      const driverName = order.assignedDriver 
+        ? (storage.getDriver(order.assignedDriver)?.name || '-')
+        : '-';
       
       text += `${idx + 1}. ${order.orderNumber}\n`;
       text += `   ${statusFormatted}\n`;
@@ -132,10 +107,9 @@ class AdminService {
     return text;
   }
 
-  // Admin command handler
   async handleAdminCommand(command, phone) {
     if (!this.isAdmin(phone)) {
-      return 'Akses ditolak. Anda bukan admin.';
+      return null; // Not admin, don't handle
     }
 
     const cmd = command.toLowerCase().trim();
@@ -161,19 +135,33 @@ class AdminService {
       case '/queue':
       case 'queue':
       case 'antrian':
-        const queueSize = await queueService.getQueueSize();
+        const queueSize = queueService.getQueueSize();
         return `📝 Jumlah orderan dalam antrian: *${queueSize}*`;
+
+      case '/save':
+      case 'save':
+        storage.saveToFile();
+        return `💾 Data berhasil disimpan!`;
+
+      case '/stats':
+      case 'stats':
+        const stats = storage.getDailyStats();
+        return `📊 *STATISTIK*\n\n` +
+               `Total Orders: ${stats.totalOrders}\n` +
+               `Completed: ${stats.completedOrders}\n` +
+               `Active: ${stats.activeOrders}\n` +
+               `Queue: ${queueService.getQueueSize()}\n` +
+               `Success Rate: ${stats.completionRate}%`;
 
       case '/help':
       case 'help':
         return this.getAdminHelp();
 
       default:
-        return null; // Command not recognized
+        return null; // Unknown command
     }
   }
 
-  // Admin help message
   getAdminHelp() {
     return `🔧 *ADMIN COMMANDS*\n\n` +
            `📊 Dashboard - Status real-time sistem\n` +
@@ -181,6 +169,8 @@ class AdminService {
            `📦 Orders - 10 orderan terakhir\n` +
            `📈 Report - Laporan harian lengkap\n` +
            `📝 Queue - Lihat antrian orderan\n` +
+           `💾 Save - Simpan data manual\n` +
+           `📊 Stats - Statistik singkat\n` +
            `❓ Help - Bantuan admin\n\n` +
            `_Kirim command atau ketik nama command_`;
   }

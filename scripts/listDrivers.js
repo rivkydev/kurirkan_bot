@@ -1,17 +1,14 @@
 // ============================================
-// FILE: scripts/listDrivers.js
+// FILE: scripts/listDrivers.js (SIMPLIFIED)
 // ============================================
 
-// Script untuk melihat daftar driver
-const mongoose = require('mongoose');
-const Driver = require('../models/Driver');
-const config = require('../config/config');
+const storage = require('../storage/inMemoryStorage');
 
 async function listDrivers() {
   try {
-    await mongoose.connect(config.database.url);
+    storage.loadFromFile();
 
-    const drivers = await Driver.find().sort({ name: 1 });
+    const drivers = storage.getAllDrivers();
 
     console.log('\n📋 DAFTAR DRIVER:\n');
     console.log('ID'.padEnd(10), 'Nama'.padEnd(20), 'Phone'.padEnd(15), 'Status'.padEnd(12), 'Orders');

@@ -1,26 +1,23 @@
 // ============================================
-// FILE: scripts/registerDriver.js
+// FILE: scripts/registerDriver.js (SIMPLIFIED)
 // ============================================
 
-// Script untuk mendaftarkan driver baru
-const mongoose = require('mongoose');
-const Driver = require('../models/Driver');
-const config = require('../config/config');
+const storage = require('../storage/inMemoryStorage');
 
 async function registerDriver(driverId, name, phone) {
   try {
-    await mongoose.connect(config.database.url);
+    // Load existing data
+    storage.loadFromFile();
 
-    const driver = new Driver({
-      driverId,
-      name,
-      phone: phone.replace(/[\s-]/g, '')
-    });
-
-    await driver.save();
+    // Add driver
+    const driver = storage.addDriver(driverId, name, phone);
+    
     console.log(`✅ Driver ${name} berhasil didaftarkan!`);
     console.log(`Driver ID: ${driverId}`);
     console.log(`Phone: ${phone}`);
+
+    // Save to file
+    storage.saveToFile();
 
     process.exit(0);
   } catch (error) {
@@ -29,7 +26,6 @@ async function registerDriver(driverId, name, phone) {
   }
 }
 
-// Usage: node scripts/registerDriver.js DRV001 "John Doe" "081234567890"
 const [driverId, name, phone] = process.argv.slice(2);
 
 if (!driverId || !name || !phone) {

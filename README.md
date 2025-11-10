@@ -1,154 +1,74 @@
-# 🚀 Kurir Kan - Bot WhatsApp untuk Layanan Kurir
+# 🚀 Kurir Kan Bot (In-Memory Version)
 
-Bot WhatsApp otomatis untuk mengelola orderan kurir dengan sistem driver management dan antrian.
+Bot WhatsApp tanpa database eksternal. Semua data disimpan di memori (RAM) dengan auto-save ke file JSON.
 
-## 📋 Fitur
+## ✨ Kelebihan In-Memory Storage
 
-- ✅ Order Pengiriman Barang
-- ✅ Order Ojek/Antar Jemput
-- ✅ Sistem Driver On/Off Duty
-- ✅ Auto-assign driver ke orderan
-- ✅ Sistem antrian jika driver tidak tersedia
-- ✅ Timeout otomatis untuk respons driver
-- ✅ Tracking status orderan
-- ✅ Notifikasi otomatis ke customer & driver
+✅ **Setup Super Cepat** - Tidak perlu install MongoDB/PostgreSQL
+✅ **Ringan** - Konsumsi resource minimal
+✅ **Portable** - Tinggal copy folder, langsung jalan
+✅ **Cocok untuk** - Prototype, testing, traffic rendah-menengah
+
+## ⚠️ Keterbatasan
+
+❌ Data hilang jika bot crash sebelum auto-save
+❌ Tidak cocok untuk traffic sangat tinggi (>1000 orders/day)
+❌ Tidak bisa scale horizontal (multiple instances)
 
 ## 🛠️ Instalasi
 
-### 1. Requirements
-- Node.js v16 atau lebih baru
-- MongoDB
-- WhatsApp di smartphone
+### 1. Install Dependencies
 
-### 2. Install Dependencies
-
-```bash
+\`\`\`bash
 npm install
-```
+\`\`\`
 
-### 3. Setup Environment
+### 2. Daftar Driver
 
-```bash
-cp .env.example .env
-# Edit .env sesuai konfigurasi Anda
-```
+\`\`\`bash
+npm run register-driver DRV001 "Budi Santoso" "081234567890"
+npm run register-driver DRV002 "Andi Wijaya" "081298765432"
+\`\`\`
 
-### 4. Jalankan Bot
+### 3. Jalankan Bot
 
-```bash
+\`\`\`bash
 npm start
-```
+\`\`\`
 
-Scan QR Code yang muncul dengan WhatsApp Anda.
+Scan QR Code yang muncul.
 
-## 👨‍💼 Manajemen Driver
+## 📊 Monitoring
 
-### Daftar Driver Baru
+### Lihat Statistik
 
-```bash
-npm run register-driver DRV001 "John Doe" "081234567890"
-```
+\`\`\`bash
+npm run stats
+\`\`\`
 
-### Lihat Daftar Driver
+### Lihat Driver
 
-```bash
+\`\`\`bash
 npm run list-drivers
-```
+\`\`\`
 
-## 📱 Cara Pakai
+## 💾 Data Persistence
 
-### Untuk Customer:
+Data otomatis disimpan setiap:
+- ✅ 5 menit sekali (auto-save)
+- ✅ Saat bot shutdown normal
+- ✅ Setelah cleanup harian
 
-1. Kirim pesan apapun ke bot
-2. Pilih layanan (Pengiriman/Ojek)
-3. Isi form yang diberikan
-4. Tunggu driver dikonfirmasi
-5. Driver akan menghubungi Anda
+File disimpan di: \`./data/storage.json\`
 
-### Untuk Driver:
+## 🔄 Backup Manual
 
-**Di Grup Driver:**
-- Kirim "On Duty" untuk siap menerima orderan
-- Kirim "Off Duty" untuk istirahat
-- Kirim "status" untuk melihat status semua driver
-- Kirim "queue" untuk melihat antrian orderan
+Cukup copy file \`storage.json\`:
 
-**Di Chat Pribadi dengan Bot:**
-- Terima orderan dengan tombol "✅ Ambil Orderan"
-- Tolak orderan dengan tombol "❌ Tolak"
-- Setelah ambil orderan, bot kirim detail lengkap
-- Kirim "Selesai" setelah orderan diantar
-- Kirim "Batal" jika customer membatalkan
-
-## 📂 Struktur Folder
-
-```
-kurir-kan-bot/
-├── config/
-│   └── config.js           # Konfigurasi aplikasi
-├── models/
-│   ├── Driver.js           # Model driver
-│   ├── Order.js            # Model orderan
-│   └── Queue.js            # Model antrian
-├── services/
-│   ├── driverService.js    # Logic driver
-│   ├── orderService.js     # Logic orderan
-│   ├── queueService.js     # Logic antrian
-│   └── notificationService.js  # Logic notifikasi
-├── handlers/
-│   └── messageHandler.js   # Handler pesan
-├── utils/
-│   └── validator.js        # Validasi input
-├── scripts/
-│   ├── registerDriver.js   # Script daftar driver
-│   └── listDrivers.js      # Script list driver
-├── app.js                  # Main application
-├── package.json
-├── .env.example
-└── README.md
-```
-
-## 🔄 Flow Orderan
-
-```
-Customer kirim pesan → Pilih layanan → Isi form
-    ↓
-Bot validasi form → Generate nomor pesanan
-    ↓
-Bot cari driver available
-    ↓
-    ├─ Ada driver → Kirim notif ke driver (timeout 60 detik)
-    │       ↓
-    │   Driver terima → Assign orderan → Kirim detail
-    │       ↓
-    │   Driver selesaikan → Notif customer → Driver available lagi
-    │
-    └─ Tidak ada driver → Tawarkan antrian
-            ↓
-        Customer setuju → Masuk queue
-            ↓
-        Driver available → Auto assign dari queue
-```
-
-## 🐛 Troubleshooting
-
-### Bot tidak bisa connect ke WhatsApp
-- Pastikan WhatsApp Web bisa dibuka di browser
-- Hapus folder `.wwebjs_auth` dan scan ulang QR
-
-### Database error
-- Pastikan MongoDB running
-- Cek MONGO_URL di .env
-
-### Driver tidak menerima notif
-- Pastikan driver sudah terdaftar dengan nomor yang benar
-- Format nomor: 628xxx atau 08xxx
+\`\`\`bash
+cp data/storage.json data/backup-$(date +%Y%m%d).json
+\`\`\`
 
 ## 📝 License
 
-MIT License - bebas digunakan dan dimodifikasi
-
-## 👨‍💻 Support
-
-Jika ada pertanyaan atau butuh bantuan, silakan buat issue di repository ini.
-```
+MIT License

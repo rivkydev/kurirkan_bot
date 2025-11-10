@@ -1,22 +1,16 @@
 // ============================================
-// FILE: app.js (MAIN APPLICATION - FIXED)
+// FILE: app.js (SIMPLIFIED - NO DATABASE)
 // ============================================
 
 require('dotenv').config();
 
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
-const mongoose = require('mongoose');
-const config = require('./config/config');
+const storage = require('./storage/inMemoryStorage');
 
 // Services
 const NotificationService = require('./services/notificationService');
 const MessageHandler = require('./handlers/messageHandler');
-
-// Models
-const Driver = require('./models/Driver');
-const Order = require('./models/Order');
-const Queue = require('./models/Queue');
 
 class KurirBot {
   constructor() {
@@ -25,70 +19,60 @@ class KurirBot {
     this.notificationService = null;
   }
 
-  // Initialize bot
   async initialize() {
-    console.log('🚀 Initializing Kurir Kan Bot...');
+    console.log('🚀 Initializing Kurir Kan Bot (In-Memory Mode)...');
 
-    // Connect to database
-    await this.connectDatabase();
+    // Load saved data if exists
+    try {
+      storage.loadFromFile();
+    } catch (error) {
+      console.log('⚠️ Starting with fresh data');
+    }
 
     // Initialize WhatsApp client
     this.initializeClient();
-
-    // Setup event handlers
     this.setupEventHandlers();
+
+    // Setup auto-save every 5 minutes
+    this.setupAutoSave();
+
+    // Setup daily cleanup
+    this.setupDailyCleanup();
   }
 
-  // Connect to MongoDB
-  async connectDatabase() {
-    try {
-      await mongoose.connect(config.database.url, {
-        useNewUrlParser: true,
-        useUnifiedTopology: true
-      });
-      console.log('✅ Connected to MongoDB');
-    } catch (error) {
-      console.error('❌ MongoDB connection error:', error);
-      process.exit(1);
-    }
-  }
-
-  // Initialize WhatsApp client
   initializeClient() {
     this.client = new Client({
       authStrategy: new LocalAuth({
-        clientId: config.bot.sessionName
+        clientId: 'kurir-kan-bot'
       }),
-      puppeteer: config.bot.puppeteerOptions
+      puppeteer: {
+        headless: true,
+        args: ['--no-sandbox', '--disable-setuid-sandbox']
+      }
     });
 
     console.log('✅ WhatsApp client initialized');
   }
 
-  // Setup event handlers
   setupEventHandlers() {
-    // QR Code for authentication
     this.client.on('qr', (qr) => {
-      console.log('📱 Scan QR Code di bawah ini:');
+      console.log('📱 Scan QR Code:');
       qrcode.generate(qr, { small: true });
     });
 
-    // Ready event
     this.client.on('ready', async () => {
       console.log('✅ Bot is ready!');
       console.log('📞 Connected as:', this.client.info.pushname);
 
-      // Initialize services
       this.notificationService = new NotificationService(this.client);
       this.messageHandler = new MessageHandler(this.client, this.notificationService);
 
-      // Start queue processor
       this.startQueueProcessor();
 
       console.log('🎉 Kurir Kan Bot is now running!');
+      this.showStats();
     });
 
-    // Message handler
     this.client.on('message', async (message) => {
       try {
         await this.messageHandler.handleMessage(message);
@@ -97,22 +81,16 @@ class KurirBot {
       }
     });
 
-    // Disconnected event
     this.client.on('disconnected', (reason) => {
-      console.log('❌ Client was disconnected:', reason);
+      console.log('❌ Client disconnected:', reason);
+      // Save data before exit
+      storage.saveToFile();
     });
 
-    // Auth failure
-    this.client.on('auth_failure', (message) => {
-      console.error('❌ Authentication failure:', message);
-    });
-
-    // Start client
     console.log('🔄 Starting WhatsApp client...');
     this.client.initialize();
   }
 
-  // Start queue processor (check queue every 5 seconds)
   startQueueProcessor() {
     setInterval(async () => {
       try {
@@ -120,20 +98,79 @@ class KurirBot {
       } catch (error) {
         console.error('Error processing queue:', error);
       }
-    }, config.order.queueCheckInterval);
+    }, 5000);
 
     console.log('✅ Queue processor started');
   }
 
-  // Graceful shutdown
+  setupAutoSave() {
+    // Auto-save every 5 minutes
+    setInterval(() => {
+      try {
+        storage.saveToFile();
+        console.log('💾 Auto-saved data');
+      } catch (error) {
+        console.error('Error auto-saving:', error);
+      }
+    }, 5 * 60 * 1000);
+
+    console.log('✅ Auto-save enabled (every 5 minutes)');
+  }
+
+  setupDailyCleanup() {
+    // Cleanup old orders every day at 3 AM
+    const now = new Date();
+    const night = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate() + 1, // tomorrow
+      3, 0, 0 // 3 AM
+    );
+    const msToMidnight = night.getTime() - now.getTime();
+
+    setTimeout(() => {
+      this.runDailyCleanup();
+      // Then repeat every 24 hours
+      setInterval(() => this.runDailyCleanup(), 24 * 60 * 60 * 1000);
+    }, msToMidnight);
+
+    console.log('✅ Daily cleanup scheduled');
+  }
+
+  runDailyCleanup() {
+    console.log('🧹 Running daily cleanup...');
+    
+    // Reset driver daily stats
+    storage.resetDailyStats();
+    
+    // Clean old orders (keep 30 days)
+    const deletedCount = storage.cleanupOldOrders(30);
+    console.log(`🗑️ Deleted ${deletedCount} old orders`);
+    
+    // Save after cleanup
+    storage.saveToFile();
+  }
+
+  showStats() {
+    const stats = storage.getDailyStats();
+    console.log('\n📊 STATISTIK HARI INI:');
+    console.log(`Total Drivers: ${storage.getAllDrivers().length}`);
+    console.log(`Total Orders: ${stats.totalOrders}`);
+    console.log(`Completed: ${stats.completedOrders}`);
+    console.log(`Active: ${stats.activeOrders}`);
+    console.log(`Queue: ${storage.getQueueSize()}\n`);
+  }
+
   async shutdown() {
     console.log('🛑 Shutting down bot...');
+    
+    // Save data
+    storage.saveToFile();
     
     if (this.client) {
       await this.client.destroy();
     }
 
-    await mongoose.connection.close();
     console.log('👋 Bot shutdown complete');
     process.exit(0);
   }
@@ -150,6 +187,7 @@ process.on('SIGTERM', () => bot.shutdown());
 // Handle uncaught errors
 process.on('uncaughtException', (error) => {
   console.error('Uncaught Exception:', error);
+  storage.saveToFile(); // Emergency save
 });
 
 process.on('unhandledRejection', (error) => {
