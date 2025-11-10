@@ -1,11 +1,11 @@
 // ============================================
-// FILE: config/config.js - WITH ADMIN
+// FILE: config/config.js
 // ============================================
 
 module.exports = {
   // Bot Configuration
   bot: {
-    sessionName: process.env.BOT_SESSION_NAME || 'kurir-kan-bot',
+    sessionName: 'kurir-kan-bot',
     autoReconnect: true,
     puppeteerOptions: {
       headless: true,
@@ -15,15 +15,9 @@ module.exports = {
 
   // Business Logic
   order: {
-    timeout: parseInt(process.env.ORDER_TIMEOUT) || 60000, // 60 detik untuk driver response
-    queueCheckInterval: parseInt(process.env.QUEUE_CHECK_INTERVAL) || 5000, // Cek queue setiap 5 detik
-    orderPrefix: process.env.ORDER_PREFIX || 'KRK'
-  },
-
-  // Admin Configuration
-  admin: {
-    phone: '6285823358559', // Nomor admin yang bisa akses analytics & reports
-    allowedNumbers: ['6285823358559'], // Bisa ditambahkan lebih banyak admin
+    timeout: 60000, // 60 detik untuk driver response
+    queueCheckInterval: 5000, // Cek queue setiap 5 detik
+    orderPrefix: 'KRK'
   },
 
   // Groups & Numbers
@@ -31,15 +25,8 @@ module.exports = {
     driverGroupId: null // Will be set dynamically
   },
 
-  // Database
+  // Database (example using MongoDB)
   database: {
     url: process.env.MONGO_URL || 'mongodb://localhost:27017/kurir-kan'
-  },
-
-  // Feature Flags
-  features: {
-    showDriverInfoOnWelcome: true, // Tampilkan info driver saat welcome
-    allowRepeatOrders: true, // Customer bisa order lagi
-    showEstimatedTime: true // Tampilkan estimasi waktu
   }
 };

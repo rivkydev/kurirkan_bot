@@ -1,49 +1,93 @@
 // ============================================
-// FILE: services/orderService.js (IN-MEMORY)
+// FILE: services/orderService.js
 // ============================================
 
-const storage = require('../storage/inMemoryStorage');
+const Order = require('../models/Order');
+const Driver = require('../models/Driver');
 
 class OrderService {
-  createOrder(orderType, customerData, orderData) {
-    return storage.createOrder(orderType, customerData, orderData);
-  }
+  // Create new order
+  async createOrder(orderType, customerData, orderData) {
+    const orderNumber = await Order.generateOrderNumber();
+    
+    const order = new Order({
+      orderNumber,
+      orderType,
+      customer: customerData,
+      status: 'NEW'
+    });
 
-  assignDriver(orderNumber, driverId) {
-    const order = storage.assignDriver(orderNumber, driverId);
-    const driver = storage.getDriver(driverId);
-    
-    if (driver) {
-      order._driverName = driver.name; // Attach driver name for convenience
+    if (orderType === 'Pengiriman') {
+      order.pengiriman = orderData;
+    } else if (orderType === 'Ojek') {
+      order.ojek = orderData;
     }
-    
+
+    order.addTimeline('NEW', 'Order created');
+    await order.save();
+
     return order;
   }
 
-  updateStatus(orderNumber, status, note = '') {
-    return storage.updateOrderStatus(orderNumber, status, note);
-  }
+  // Assign driver to order
+  async assignDriver(orderId, driverId) {
+    const order = await Order.findById(orderId);
+    if (!order) throw new Error('Order not found');
 
-  cancelOrder(orderNumber, reason) {
-    return storage.cancelOrder(orderNumber, reason);
-  }
-
-  getOrderByNumber(orderNumber) {
-    const order = storage.getOrder(orderNumber);
-    if (order && order.assignedDriver) {
-      const driver = storage.getDriver(order.assignedDriver);
-      if (driver) {
-        order._driverName = driver.name;
-      }
-    }
+    order.assignedDriver = driverId;
+    order.status = 'ASSIGNED';
+    order.assignedAt = new Date();
+    order.addTimeline('ASSIGNED', `Assigned to driver ${driverId}`);
+    
+    await order.save();
     return order;
   }
 
-  getOrderById(orderNumber) {
-    // Same as getOrderByNumber for in-memory
-    return this.getOrderByNumber(orderNumber);
+  // Update order status
+  async updateStatus(orderId, status, note = '') {
+    const order = await Order.findById(orderId);
+    if (!order) throw new Error('Order not found');
+
+    order.status = status;
+    
+    if (status === 'DELIVERED') {
+      order.completedAt = new Date();
+    } else if (status === 'CANCELLED') {
+      order.cancelledAt = new Date();
+    }
+
+    order.addTimeline(status, note);
+    await order.save();
+
+    return order;
   }
 
+  // Cancel order
+  async cancelOrder(orderId, reason) {
+    const order = await Order.findById(orderId).populate('assignedDriver');
+    if (!order) throw new Error('Order not found');
+
+    order.status = 'CANCELLED';
+    order.cancelledAt = new Date();
+    order.cancellationReason = reason;
+    order.addTimeline('CANCELLED', reason);
+    
+    await order.save();
+
+    return order;
+  }
+
+  // Get order by number
+  async getOrderByNumber(orderNumber) {
+    return await Order.findOne({ orderNumber }).populate('assignedDriver');
+  }
+
+  // Get order by ID
+  async getOrderById(orderId) {
+    return await Order.findById(orderId).populate('assignedDriver');
+  }
+
+  // Format order details for display
   formatOrderDetails(order) {
     let details = `📋 *DETAIL ORDERAN*\n\n`;
     details += `No. Pesanan: *${order.orderNumber}*\n`;
@@ -94,16 +138,11 @@ class OrderService {
     return details;
   }
 
-  getActiveOrdersCount() {
-    return storage.getActiveOrders().length;
-  }
-
-  getCustomerLastOrder(customerPhone) {
-    const orders = storage.getOrdersByCustomer(customerPhone);
-    if (orders.length === 0) return null;
-    
-    // Sort by createdAt descending
-    return orders.sort((a, b) => b.createdAt - a.createdAt)[0];
+  // Get active orders count
+  async getActiveOrdersCount() {
+    return await Order.countDocuments({
+      status: { $in: ['ASSIGNED', 'PICKED_UP', 'IN_TRANSIT'] }
+    });
   }
 }
 

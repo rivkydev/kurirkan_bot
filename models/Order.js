@@ -1,8 +1,6 @@
 // ============================================
-// FILE: models/Order.js (FIXED)
+// FILE: models/Order.js
 // ============================================
-
-const mongoose = require('mongoose');
 
 const orderSchema = new mongoose.Schema({
   orderNumber: {
@@ -46,7 +44,7 @@ const orderSchema = new mongoose.Schema({
     namaPenumpang: String,
     nomorHp: String,
     lokasiJemput: String,
-    patokanJemput: String,
+    patokanjemput: String,
     lokasiTujuan: String,
     patokanTujuan: String,
     jumlahPenumpang: Number,

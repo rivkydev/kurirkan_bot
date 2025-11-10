@@ -1,8 +1,6 @@
 // ============================================
-// FILE: models/Queue.js (FIXED)
+// FILE: models/Queue.js
 // ============================================
-
-const mongoose = require('mongoose');
 
 const queueSchema = new mongoose.Schema({
   order: {
