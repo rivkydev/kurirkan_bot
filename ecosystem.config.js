@@ -16,7 +16,7 @@ module.exports = {
     cron_restart: '0 3 * * *', // Restart setiap jam 3 pagi
   }],
 
-  // Cron jobs untuk maintenance
+  // Cron jobs
   deploy: {
     production: {
       user: 'node',

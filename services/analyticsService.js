@@ -1,29 +1,78 @@
 // ============================================
-// FILE: services/analyticsService.js (IN-MEMORY)
+// FILE: services/analyticsService.js
 // ============================================
 
-const storage = require('../storage/inMemoryStorage');
+const Order = require('../models/Order');
+const Driver = require('../models/Driver');
 
 class AnalyticsService {
-  getDailyStats(date = new Date()) {
-    return storage.getDailyStats(date);
+  // Get daily statistics
+  async getDailyStats(date = new Date()) {
+    const startOfDay = new Date(date.setHours(0, 0, 0, 0));
+    const endOfDay = new Date(date.setHours(23, 59, 59, 999));
+
+    const [
+      totalOrders,
+      completedOrders,
+      cancelledOrders,
+      activeOrders,
+      avgCompletionTime
+    ] = await Promise.all([
+      // Total orders
+      Order.countDocuments({
+        createdAt: { $gte: startOfDay, $lte: endOfDay }
+      }),
+
+      // Completed orders
+      Order.countDocuments({
+        createdAt: { $gte: startOfDay, $lte: endOfDay },
+        status: 'DELIVERED'
+      }),
+
+      // Cancelled orders
+      Order.countDocuments({
+        createdAt: { $gte: startOfDay, $lte: endOfDay },
+        status: 'CANCELLED'
+      }),
+
+      // Active orders
+      Order.countDocuments({
+        status: { $in: ['NEW', 'AWAITING_DRIVER', 'ASSIGNED', 'PICKED_UP', 'IN_TRANSIT'] }
+      }),
+
+      // Average completion time
+      this.getAvgCompletionTime(startOfDay, endOfDay)
+    ]);
+
+    return {
+      date: startOfDay,
+      totalOrders,
+      completedOrders,
+      cancelledOrders,
+      activeOrders,
+      avgCompletionTime,
+      completionRate: totalOrders > 0 ? (completedOrders / totalOrders * 100).toFixed(2) : 0
+    };
   }
 
-  async getDriverStats() {
-    const drivers = storage.getAllDrivers();
-    const today = new Date().setHours(0, 0, 0, 0);
+  // Get driver statistics
+  async getDriverStats(driverId = null) {
+    const match = driverId ? { _id: driverId } : {};
+    
+    const drivers = await Driver.find(match).lean();
 
-    return drivers.map(driver => {
-      // Count completed orders today
-      const allOrders = storage.getOrdersByCustomer('*') || []; // Get all orders
-      const driverOrders = Array.from(storage.orders.values())
-        .filter(o => o.assignedDriver === driver.driverId);
-      
-      const completedToday = driverOrders.filter(o => 
-        o.status === 'DELIVERED' && 
-        o.completedAt &&
-        new Date(o.completedAt).setHours(0, 0, 0, 0) === today
-      ).length;
+    const stats = await Promise.all(drivers.map(async (driver) => {
+      const [totalOrders, completedToday, avgRating] = await Promise.all([
+        Order.countDocuments({ assignedDriver: driver._id }),
+        Order.countDocuments({
+          assignedDriver: driver._id,
+          status: 'DELIVERED',
+          completedAt: {
+            $gte: new Date().setHours(0, 0, 0, 0)
+          }
+        }),
+        this.getDriverAvgRating(driver._id)
+      ]);
 
       return {
         driverId: driver.driverId,
@@ -31,41 +80,125 @@ class AnalyticsService {
         status: driver.status,
         totalOrders: driver.totalOrders,
         todayOrders: driver.todayOrders,
-        completedToday
+        completedToday,
+        avgRating: avgRating || 'N/A'
       };
-    });
+    }));
+
+    return stats;
   }
 
+  // Get average completion time
+  async getAvgCompletionTime(startDate, endDate) {
+    const result = await Order.aggregate([
+      {
+        $match: {
+          status: 'DELIVERED',
+          createdAt: { $gte: startDate, $lte: endDate },
+          completedAt: { $exists: true }
+        }
+      },
+      {
+        $project: {
+          completionTime: {
+            $subtract: ['$completedAt', '$createdAt']
+          }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          avgTime: { $avg: '$completionTime' }
+        }
+      }
+    ]);
+
+    if (result.length === 0) return 0;
+
+    // Convert milliseconds to minutes
+    return Math.round(result[0].avgTime / 60000);
+  }
+
+  // Get driver average rating (placeholder - implement rating system)
+  async getDriverAvgRating(driverId) {
+    // TODO: Implement rating system
+    return null;
+  }
+
+  // Get order type breakdown
+  async getOrderTypeBreakdown(startDate, endDate) {
+    const result = await Order.aggregate([
+      {
+        $match: {
+          createdAt: { $gte: startDate, $lte: endDate }
+        }
+      },
+      {
+        $group: {
+          _id: '$orderType',
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+
+    return result.reduce((acc, item) => {
+      acc[item._id] = item.count;
+      return acc;
+    }, {});
+  }
+
+  // Get peak hours
+  async getPeakHours(startDate, endDate) {
+    const result = await Order.aggregate([
+      {
+        $match: {
+          createdAt: { $gte: startDate, $lte: endDate }
+        }
+      },
+      {
+        $project: {
+          hour: { $hour: '$createdAt' }
+        }
+      },
+      {
+        $group: {
+          _id: '$hour',
+          count: { $sum: 1 }
+        }
+      },
+      {
+        $sort: { count: -1 }
+      },
+      {
+        $limit: 5
+      }
+    ]);
+
+    return result.map(item => ({
+      hour: `${item._id}:00`,
+      orders: item.count
+    }));
+  }
+
+  // Generate daily report
   async generateDailyReport(date = new Date()) {
-    const dailyStats = this.getDailyStats(date);
-    const driverStats = await this.getDriverStats();
-
-    // Get order type breakdown
-    const startOfDay = new Date(date.setHours(0, 0, 0, 0));
-    const endOfDay = new Date(date.setHours(23, 59, 59, 999));
-    
-    const ordersToday = Array.from(storage.orders.values())
-      .filter(o => o.createdAt >= startOfDay && o.createdAt <= endOfDay);
-
-    const orderTypeBreakdown = ordersToday.reduce((acc, order) => {
-      acc[order.orderType] = (acc[order.orderType] || 0) + 1;
-      return acc;
-    }, {});
-
-    // Get peak hours
-    const hourCounts = ordersToday.reduce((acc, order) => {
-      const hour = new Date(order.createdAt).getHours();
-      acc[hour] = (acc[hour] || 0) + 1;
-      return acc;
-    }, {});
-
-    const peakHours = Object.entries(hourCounts)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 5)
-      .map(([hour, count]) => ({
-        hour: `${hour}:00`,
-        orders: count
-      }));
+    const [
+      dailyStats,
+      driverStats,
+      orderTypeBreakdown,
+      peakHours
+    ] = await Promise.all([
+      this.getDailyStats(date),
+      this.getDriverStats(),
+      this.getOrderTypeBreakdown(
+        new Date(date.setHours(0, 0, 0, 0)),
+        new Date(date.setHours(23, 59, 59, 999))
+      ),
+      this.getPeakHours(
+        new Date(date.setHours(0, 0, 0, 0)),
+        new Date(date.setHours(23, 59, 59, 999))
+      )
+    ]);
 
     return {
       date: date.toISOString().split('T')[0],
@@ -76,6 +209,7 @@ class AnalyticsService {
     };
   }
 
+  // Format report for WhatsApp
   formatReportForWhatsApp(report) {
     let text = `📊 *LAPORAN HARIAN*\n`;
     text += `Tanggal: ${report.date}\n\n`;
@@ -100,12 +234,10 @@ class AnalyticsService {
     });
     text += `\n`;
 
-    if (report.peakHours && report.peakHours.length > 0) {
-      text += `⏰ *JAM SIBUK:*\n`;
-      report.peakHours.forEach((peak, idx) => {
-        text += `${idx + 1}. ${peak.hour} - ${peak.orders} order\n`;
-      });
-    }
+    text += `⏰ *JAM SIBUK:*\n`;
+    report.peakHours.forEach((peak, idx) => {
+      text += `${idx + 1}. ${peak.hour} - ${peak.orders} order\n`;
+    });
 
     return text;
   }

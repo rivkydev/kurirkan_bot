@@ -9,4 +9,4 @@ README.md
 logs
 backups
 reports
-.log
+*.log

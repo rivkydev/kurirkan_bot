@@ -1,3 +1,7 @@
+// ============================================
+// FILE: scripts/dailyReport.js
+// ============================================
+
 const mongoose = require('mongoose');
 const config = require('../config/config');
 const analyticsService = require('../services/analyticsService');
