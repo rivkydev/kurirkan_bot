@@ -1,6 +1,9 @@
 // ============================================
-// FILE: services/notificationService.js
+// FILE: services/notificationService.js - ENHANCED
 // ============================================
+
+const config = require('../config/config');
+const driverService = require('./driverService');
 
 class NotificationService {
   constructor(client) {
@@ -32,14 +35,56 @@ class NotificationService {
     }
   }
 
-  // Send welcome message
-  async sendWelcome(to) {
+  // Get driver availability info
+  async getDriverAvailabilityInfo() {
+    const availableDrivers = await driverService.getAvailableDrivers();
+    
+    if (availableDrivers.length === 0) {
+      return '⚠️ _Semua driver sedang sibuk. Pesanan akan masuk antrian._';
+    }
+
+    if (availableDrivers.length === 1) {
+      return '✅ _1 driver siap melayani Anda._';
+    }
+
+    return `✅ _${availableDrivers.length} driver siap melayani Anda._`;
+  }
+
+  // Send welcome message with driver info
+  async sendWelcome(to, isRepeatCustomer = false) {
+    const driverInfo = config.features.showDriverInfoOnWelcome 
+      ? await this.getDriverAvailabilityInfo() 
+      : '';
+
+    const greeting = isRepeatCustomer 
+      ? 'Selamat datang kembali! 👋' 
+      : 'Halo! Selamat datang di *Kurir Kan* 👋';
+
+    const message = `${greeting}\n\n${driverInfo}\n\nSilakan pilih layanan yang Anda butuhkan:`;
+
     await this.sendButtons(
       to,
-      'Halo! Selamat datang di *Kurir Kan*\n\nSilakan pilih layanan yang Anda butuhkan:',
+      message,
       [
         { id: 'btn_pengiriman', text: '📦 Pengiriman Barang' },
         { id: 'btn_ojek', text: '🏍️ Ojek/Antar Jemput' }
+      ]
+    );
+  }
+
+  // Send welcome for repeat customer with quick options
+  async sendRepeatCustomerWelcome(to, lastOrder) {
+    const driverInfo = await this.getDriverAvailabilityInfo();
+    
+    const message = `Selamat datang kembali! 👋\n\n${driverInfo}\n\nOrderan terakhir Anda: *${lastOrder.orderNumber}*\n${lastOrder.orderType}\n\nSilakan pilih:`;
+
+    await this.sendButtons(
+      to,
+      message,
+      [
+        { id: 'btn_new_order', text: '📦 Order Baru' },
+        { id: 'btn_repeat_order', text: '🔄 Ulangi Order Sebelumnya' },
+        { id: 'btn_check_status', text: '📋 Cek Status Order' }
       ]
     );
   }
@@ -143,13 +188,16 @@ Mohon tunggu sebentar...`;
 
   // Send driver found notification
   async sendDriverFound(customerPhone, driverName, orderNumber) {
+    const estimatedTime = config.features.showEstimatedTime 
+      ? '\nEstimasi waktu: 5-10 menit' 
+      : '';
+
     const message = `✅ *DRIVER DITEMUKAN!*
 
 Driver Anda: *${driverName}*
 No. Pesanan: ${orderNumber}
 
-Driver akan segera menghubungi Anda.
-Estimasi waktu: 5-10 menit`;
+Driver akan segera menghubungi Anda.${estimatedTime}`;
 
     await this.client.sendMessage(customerPhone, message);
   }
@@ -164,7 +212,7 @@ No. Pesanan: ${orderNumber}
 Driver Anda: ${driverName}
 Status: Terkirim ✓
 
-Ingin pesan lagi? Ketik /order atau pilih menu di bawah.`;
+Ingin pesan lagi? Ketik pesan apapun untuk order baru.`;
 
     await this.sendButtons(
       customerPhone,
@@ -216,6 +264,26 @@ No. Pesanan: ${orderNumber}
 Alasan: ${reason}
 
 Silakan pesan kembali jika berminat.`;
+
+    await this.client.sendMessage(customerPhone, message);
+  }
+
+  // Send order status
+  async sendOrderStatus(customerPhone, order) {
+    const Order = require('../models/Order');
+    const Formatter = require('../utils/formatter');
+    
+    let message = `📋 *STATUS PESANAN*\n\n`;
+    message += `No. Pesanan: *${order.orderNumber}*\n`;
+    message += `Status: ${Formatter.formatOrderStatus(order.status)}\n`;
+    message += `Jenis: ${order.orderType}\n\n`;
+
+    if (order.assignedDriver) {
+      message += `Driver: ${order.assignedDriver.name}\n`;
+    }
+
+    message += `\n*Timeline:*\n`;
+    message += Formatter.formatTimeline(order.timeline);
 
     await this.client.sendMessage(customerPhone, message);
   }
