@@ -1,93 +1,34 @@
 // ============================================
-// FILE: services/orderService.js
+// FILE: services/orderService.js (IN-MEMORY)
 // ============================================
 
-const Order = require('../models/Order');
-const Driver = require('../models/Driver');
+const storage = require('../storage/inMemoryStorage');
 
 class OrderService {
-  // Create new order
-  async createOrder(orderType, customerData, orderData) {
-    const orderNumber = await Order.generateOrderNumber();
-    
-    const order = new Order({
-      orderNumber,
-      orderType,
-      customer: customerData,
-      status: 'NEW'
-    });
-
-    if (orderType === 'Pengiriman') {
-      order.pengiriman = orderData;
-    } else if (orderType === 'Ojek') {
-      order.ojek = orderData;
-    }
-
-    order.addTimeline('NEW', 'Order created');
-    await order.save();
-
-    return order;
+  createOrder(orderType, customerData, orderData) {
+    return storage.createOrder(orderType, customerData, orderData);
   }
 
-  // Assign driver to order
-  async assignDriver(orderId, driverId) {
-    const order = await Order.findById(orderId);
-    if (!order) throw new Error('Order not found');
-
-    order.assignedDriver = driverId;
-    order.status = 'ASSIGNED';
-    order.assignedAt = new Date();
-    order.addTimeline('ASSIGNED', `Assigned to driver ${driverId}`);
-    
-    await order.save();
-    return order;
+  assignDriver(orderNumber, driverId) {
+    return storage.assignDriver(orderNumber, driverId);
   }
 
-  // Update order status
-  async updateStatus(orderId, status, note = '') {
-    const order = await Order.findById(orderId);
-    if (!order) throw new Error('Order not found');
-
-    order.status = status;
-    
-    if (status === 'DELIVERED') {
-      order.completedAt = new Date();
-    } else if (status === 'CANCELLED') {
-      order.cancelledAt = new Date();
-    }
-
-    order.addTimeline(status, note);
-    await order.save();
-
-    return order;
+  updateStatus(orderNumber, status, note = '') {
+    return storage.updateOrderStatus(orderNumber, status, note);
   }
 
-  // Cancel order
-  async cancelOrder(orderId, reason) {
-    const order = await Order.findById(orderId).populate('assignedDriver');
-    if (!order) throw new Error('Order not found');
-
-    order.status = 'CANCELLED';
-    order.cancelledAt = new Date();
-    order.cancellationReason = reason;
-    order.addTimeline('CANCELLED', reason);
-    
-    await order.save();
-
-    return order;
+  cancelOrder(orderNumber, reason) {
+    return storage.cancelOrder(orderNumber, reason);
   }
 
-  // Get order by number
-  async getOrderByNumber(orderNumber) {
-    return await Order.findOne({ orderNumber }).populate('assignedDriver');
+  getOrderByNumber(orderNumber) {
+    return storage.getOrder(orderNumber);
   }
 
-  // Get order by ID
-  async getOrderById(orderId) {
-    return await Order.findById(orderId).populate('assignedDriver');
+  getOrderById(orderNumber) {
+    return storage.getOrder(orderNumber);
   }
 
-  // Format order details for display
   formatOrderDetails(order) {
     let details = `📋 *DETAIL ORDERAN*\n\n`;
     details += `No. Pesanan: *${order.orderNumber}*\n`;
@@ -106,9 +47,7 @@ class OrderService {
       details += `HP: ${p.nomorHpPenerima}\n`;
       details += `Lokasi: ${p.lokasiPengantaran}\n`;
       
-      details += `\n*PESANAN:*\n`;
-      details += `${p.deskripsiPesanan}\n`;
-      
+      details += `\n*PESANAN:*\n${p.deskripsiPesanan}\n`;
       details += `\n*INFO LAINNYA:*\n`;
       details += `Waktu: ${p.waktuDiinginkan}\n`;
       details += `Pembayaran: ${p.metodePembayaran}\n`;
@@ -121,12 +60,10 @@ class OrderService {
       details += `HP: ${o.nomorHp}\n`;
       details += `Jumlah: ${o.jumlahPenumpang} orang\n`;
       
-      details += `\n*LOKASI JEMPUT:*\n`;
-      details += `${o.lokasiJemput}\n`;
+      details += `\n*LOKASI JEMPUT:*\n${o.lokasiJemput}\n`;
       if (o.patokanJemput) details += `Patokan: ${o.patokanJemput}\n`;
       
-      details += `\n*LOKASI TUJUAN:*\n`;
-      details += `${o.lokasiTujuan}\n`;
+      details += `\n*LOKASI TUJUAN:*\n${o.lokasiTujuan}\n`;
       if (o.patokanTujuan) details += `Patokan: ${o.patokanTujuan}\n`;
       
       details += `\n*INFO LAINNYA:*\n`;
@@ -138,11 +75,8 @@ class OrderService {
     return details;
   }
 
-  // Get active orders count
-  async getActiveOrdersCount() {
-    return await Order.countDocuments({
-      status: { $in: ['ASSIGNED', 'PICKED_UP', 'IN_TRANSIT'] }
-    });
+  getActiveOrdersCount() {
+    return storage.getActiveOrders().length;
   }
 }
 

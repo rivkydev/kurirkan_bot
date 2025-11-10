@@ -1,56 +1,36 @@
 // ============================================
-// FILE: services/queueService.js
+// FILE: services/queueService.js (IN-MEMORY)
 // ============================================
 
-const Queue = require('../models/Queue');
-const Order = require('../models/Order');
+const storage = require('../storage/inMemoryStorage');
 
 class QueueService {
-  // Add order to queue
-  async addToQueue(orderId) {
-    const queueItem = new Queue({
-      order: orderId,
-      priority: 0,
-      attempts: 0
-    });
-    await queueItem.save();
-    return queueItem;
+  addToQueue(orderNumber) {
+    return storage.addToQueue(orderNumber);
   }
 
-  // Get next order from queue
-  async getNextOrder() {
-    const queueItem = await Queue.findOne()
-      .sort({ priority: -1, createdAt: 1 })
-      .populate('order');
+  getNextOrder() {
+    const result = storage.getNextInQueue();
+    if (!result) return null;
     
-    return queueItem;
+    return {
+      _id: result.queueItem.orderNumber,
+      order: result.order
+    };
   }
 
-  // Remove order from queue
-  async removeFromQueue(queueId) {
-    await Queue.findByIdAndDelete(queueId);
+  removeFromQueue(orderNumber) {
+    storage.removeFromQueue(orderNumber);
   }
 
-  // Increment attempts
-  async incrementAttempts(queueId) {
-    const queueItem = await Queue.findById(queueId);
-    if (queueItem) {
-      queueItem.attempts += 1;
-      await queueItem.save();
-    }
-    return queueItem;
+  getQueueSize() {
+    return storage.getQueueSize();
   }
 
-  // Get queue size
-  async getQueueSize() {
-    return await Queue.countDocuments();
-  }
-
-  // Get all queue items
-  async getAllQueue() {
-    return await Queue.find()
-      .sort({ priority: -1, createdAt: 1 })
-      .populate('order');
+  getAllQueue() {
+    return storage.queue.map(item => ({
+      order: storage.getOrder(item.orderNumber)
+    }));
   }
 }
 

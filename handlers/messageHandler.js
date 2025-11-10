@@ -263,7 +263,7 @@ class MessageHandler {
       
       this.userStates.set(order.customer.chatId, {
         step: 'waiting_queue_decision',
-        orderId: order._id
+        orderId: order.orderNumber
       });
       
       return;
@@ -301,7 +301,7 @@ class MessageHandler {
     }, timeout);
 
     // Store timeout
-    this.driverTimeouts.set(order._id.toString(), {
+    this.driverTimeouts.set(order.orderNumber, {
       timeoutId,
       driverId: driver._id,
       orderNumber: order.orderNumber
