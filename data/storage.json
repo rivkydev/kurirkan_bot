@@ -5,95 +5,18 @@
       {
         "driverId": "DRV001",
         "name": "Muhammad Rivky",
-        "phone": "085823358559",
+        "phone": "8637615485122",
         "status": "Off Duty",
         "currentOrder": null,
         "totalOrders": 0,
         "todayOrders": 0,
-        "lastStatusUpdate": "2025-11-10T18:34:49.179Z",
-        "createdAt": "2025-11-10T18:34:49.179Z"
+        "lastStatusUpdate": "2025-11-12T17:12:12.848Z",
+        "createdAt": "2025-11-12T17:12:12.848Z"
       }
     ]
   ],
-  "orders": [
-    [
-      "KRK-20251112-001",
-      {
-        "orderNumber": "KRK-20251112-001",
-        "orderType": "Pengiriman",
-        "status": "NEW",
-        "customer": {
-          "phone": "8637615485122@lid",
-          "name": "martin",
-          "chatId": "8637615485122@lid"
-        },
-        "assignedDriver": null,
-        "assignedAt": null,
-        "completedAt": null,
-        "cancelledAt": null,
-        "cancellationReason": null,
-        "timeline": [
-          {
-            "status": "NEW",
-            "timestamp": "2025-11-12T16:24:08.910Z",
-            "note": "Order created"
-          }
-        ],
-        "createdAt": "2025-11-12T16:24:08.910Z",
-        "pengiriman": {
-          "namaPengirim": "martin",
-          "nomorHpPengirim": "085823358559",
-          "lokasiPengambilan": "jalan daeng pawero no 6",
-          "deskripsiPesanan": "ayam geprek",
-          "namaPenerima": "tinus",
-          "nomorHpPenerima": "085213442540",
-          "lokasiPengantaran": "jalan kejayaan raya no 10",
-          "waktuDiinginkan": "15:00",
-          "metodePembayaran": "COD",
-          "catatanTambahan": "jangan lama gre"
-        }
-      }
-    ],
-    [
-      "KRK-20251112-002",
-      {
-        "orderNumber": "KRK-20251112-002",
-        "orderType": "Pengiriman",
-        "status": "NEW",
-        "customer": {
-          "phone": "196232928604386@lid",
-          "name": "martin",
-          "chatId": "196232928604386@lid"
-        },
-        "assignedDriver": null,
-        "assignedAt": null,
-        "completedAt": null,
-        "cancelledAt": null,
-        "cancellationReason": null,
-        "timeline": [
-          {
-            "status": "NEW",
-            "timestamp": "2025-11-12T16:30:07.665Z",
-            "note": "Order created"
-          }
-        ],
-        "createdAt": "2025-11-12T16:30:07.665Z",
-        "pengiriman": {
-          "namaPengirim": "martin",
-          "nomorHpPengirim": "085823358559",
-          "lokasiPengambilan": "jalan daeng pawero no 6",
-          "deskripsiPesanan": "ayam geprek",
-          "namaPenerima": "tinus",
-          "nomorHpPenerima": "085213442540",
-          "lokasiPengantaran": "jalan kejayaan raya no 10",
-          "waktuDiinginkan": "15:00",
-          "metodePembayaran": "COD",
-          "catatanTambahan": "jangan lama gre"
-        }
-      }
-    ]
-  ],
+  "orders": [],
   "queue": [],
-  "orderCounter": 2,
-  "exportedAt": "2025-11-12T16:46:26.671Z"
+  "orderCounter": 0,
+  "exportedAt": "2025-11-12T17:13:04.388Z"
 }
