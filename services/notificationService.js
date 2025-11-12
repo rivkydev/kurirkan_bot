@@ -1,25 +1,30 @@
 // ============================================
 // FILE: services/notificationService.js
 // ============================================
+const { Buttons } = require('whatsapp-web.js');
+
 
 class NotificationService {
   constructor(client) {
     this.client = client;
   }
 
-  // Send message with buttons
+  // GANTI FUNGSI LAMA ANDA DENGAN YANG INI
   async sendButtons(to, text, buttons) {
     try {
-      const buttonMessage = {
-        text: text,
-        buttons: buttons.map((btn, idx) => ({
+      // Buat objek tombol menggunakan kelas Buttons
+      const buttonMessage = new Buttons(
+        text, // Body
+        buttons.map((btn, idx) => ({ // Buttons
           id: btn.id || `btn_${idx}`,
           body: btn.text
         })),
-        footer: 'Kurir Kan - Layanan Kurir Terpercaya'
-      };
+        null, // Title (opsional, bisa null)
+        'Kurir Kan - Layanan Kurir Terpercaya' // Footer
+      );
 
       await this.client.sendMessage(to, buttonMessage);
+
     } catch (error) {
       console.error('Error sending buttons:', error);
       // Fallback: send text with numbered options
