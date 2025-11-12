@@ -1,5 +1,5 @@
 // ============================================
-// FILE: storage/inMemoryStorage.js
+// FILE: storage/inMemoryStorage.js (FIXED PRIORITY)
 // ============================================
 
 class InMemoryStorage {
@@ -46,7 +46,7 @@ class InMemoryStorage {
   }
 
   getDriverByPhone(phone) {
-    const normalizedPhone = phone.replace('@c.us', '').replace(/[\s-]/g, '');
+    const normalizedPhone = phone.replace('@c.us', '').replace('@lid', '').replace(/[\s-]/g, '');
     const driverId = this.driversByPhone.get(normalizedPhone);
     return driverId ? this.drivers.get(driverId) : null;
   }
@@ -87,10 +87,26 @@ class InMemoryStorage {
     return driver;
   }
 
+  // FIXED: Prioritize driver with LEAST orders today
   getAvailableDrivers() {
-    return Array.from(this.drivers.values())
-      .filter(d => d.status === 'On Duty' && !d.currentOrder)
-      .sort((a, b) => a.todayOrders - b.todayOrders);
+    const available = Array.from(this.drivers.values())
+      .filter(d => d.status === 'On Duty' && !d.currentOrder);
+    
+    // Sort by todayOrders ASC (paling sedikit orderan di prioritaskan)
+    available.sort((a, b) => {
+      // Primary: Sort by todayOrders (ascending - least orders first)
+      if (a.todayOrders !== b.todayOrders) {
+        return a.todayOrders - b.todayOrders;
+      }
+      // Secondary: If same orders, sort by totalOrders (ascending)
+      if (a.totalOrders !== b.totalOrders) {
+        return a.totalOrders - b.totalOrders;
+      }
+      // Tertiary: Random to be fair
+      return Math.random() - 0.5;
+    });
+    
+    return available;
   }
 
   resetDailyStats() {

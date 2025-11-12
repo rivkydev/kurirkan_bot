@@ -23,7 +23,7 @@ class NotificationService {
     }
   }
 
-  // Send welcome message
+  // Send welcome message (CUSTOMER ONLY)
   async sendWelcome(to) {
     const text = `Halo! Selamat datang di *Kurir Kan* 🚀
 
@@ -37,7 +37,7 @@ _Balas dengan nomor pilihan (1 atau 2)_`;
     await this.client.sendMessage(to, text);
   }
 
-  // Send pengiriman form
+  // Send pengiriman form (CUSTOMER ONLY)
   async sendPengirimanForm(to) {
     const formText = `📋 *FORM PEMESANAN PENGIRIMAN*
 
@@ -60,7 +60,7 @@ _Kirim form yang sudah diisi!_`;
     await this.client.sendMessage(to, formText);
   }
 
-  // Send ojek form
+  // Send ojek form (CUSTOMER ONLY)
   async sendOjekForm(to) {
     const formText = `📋 *FORM PEMESANAN OJEK*
 
@@ -82,140 +82,162 @@ _Kirim form yang sudah diisi!_`;
     await this.client.sendMessage(to, formText);
   }
 
-  // Send order to driver (FIXED)
+  // Send order to driver (DRIVER ONLY - SIMPLIFIED)
   async sendOrderToDriver(driverPhone, order, timeout = 60) {
     try {
-      // PERBAIKAN: Gunakan chatId asli driver, jangan normalize
-      const driver = require('../storage/inMemoryStorage').getDriverByPhone(driverPhone.replace('@c.us', ''));
+      const storage = require('../storage/inMemoryStorage');
+      const driver = storage.getDriverByPhone(driverPhone.replace('@c.us', '').replace('@lid', ''));
       
       if (!driver) {
         console.error('❌ Driver not found:', driverPhone);
         return;
       }
 
+      // PESAN UNTUK DRIVER - HANYA INFO ORDERAN BARU
       const message = `🔔 *ORDERAN BARU*
 
-Hai ${driver.name}! Ada orderan baru nih, mau ambil?
+Hai ${driver.name}! Ada orderan baru nih.
 
-No. Pesanan: *${order.orderNumber}*
-Jenis: ${order.orderType}
+📋 No. Pesanan: *${order.orderNumber}*
+📦 Jenis: ${order.orderType}
 
-⏰ Respon dalam ${timeout} detik
+⏰ Mohon respon dalam ${timeout} detik
 
-Balas:
-1. ✅ Terima Orderan
-2. ❌ Tolak`;
+Balas dengan:
+1 = Terima Orderan
+2 = Tolak Orderan`;
 
-      // Kirim ke chatId driver yang sebenarnya
-      await this.client.sendMessage(driver.phone + '@lid', message);
+      // Kirim ke driver dengan format LID yang benar
+      const driverChatId = driver.phone.includes('@') ? driver.phone : driver.phone + '@lid';
+      await this.client.sendMessage(driverChatId, message);
       
-      console.log(`✅ Order ${order.orderNumber} sent to driver ${driver.name} (${driver.phone})`);
+      console.log(`✅ Order notification sent to driver ${driver.name} (${driverChatId})`);
       
     } catch (error) {
       console.error('Error sending order to driver:', error);
     }
   }
 
-  // Send order details to driver
-  async sendOrderDetailsToDriver(driverPhone, orderDetails) {
+  // Send FULL order details to driver (AFTER ACCEPTANCE)
+  async sendOrderDetailsToDriver(driverChatId, orderDetails) {
     try {
-      await this.client.sendMessage(driverPhone, orderDetails);
+      // Kirim detail lengkap orderan
+      await this.client.sendMessage(driverChatId, orderDetails);
       
-      const actionText = `\n_Setelah selesai, kirim:_
-- "selesai" untuk menyelesaikan orderan
-- "batal" untuk membatalkan orderan`;
+      // Kirim instruksi action
+      const actionText = `\n📍 *INSTRUKSI DRIVER:*
+
+Setelah selesai mengantarkan:
+- Ketik "selesai" untuk menyelesaikan orderan
+- Ketik "batal" jika customer membatalkan
+
+_Selamat bekerja! 🏍️_`;
       
-      await this.client.sendMessage(driverPhone, actionText);
+      await this.client.sendMessage(driverChatId, actionText);
       
     } catch (error) {
       console.error('Error sending order details:', error);
     }
   }
 
-  // Send order confirmation to customer
+  // Send order confirmation to customer (CUSTOMER ONLY)
   async sendOrderConfirmation(customerPhone, orderNumber) {
     const message = `✅ *PESANAN DITERIMA*
 
 Terima kasih! Pesanan Anda telah kami terima.
 
-No. Pesanan: *${orderNumber}*
+📋 No. Pesanan: *${orderNumber}*
 
-Kami sedang mencarikan driver untuk Anda.
-Mohon tunggu sebentar... ⏳`;
+🔍 Kami sedang mencarikan driver untuk Anda.
+⏳ Mohon tunggu sebentar...`;
 
     await this.client.sendMessage(customerPhone, message);
   }
 
-  // Send driver found notification
+  // Send driver found notification (CUSTOMER ONLY)
   async sendDriverFound(customerPhone, driverName, orderNumber) {
     const message = `✅ *DRIVER DITEMUKAN!*
 
-Driver Anda: *${driverName}*
-No. Pesanan: ${orderNumber}
+👨‍💼 Driver Anda: *${driverName}*
+📋 No. Pesanan: ${orderNumber}
 
-Driver akan segera menghubungi Anda.
-Estimasi waktu: 5-10 menit 🏍️`;
+📞 Driver akan segera menghubungi Anda.
+⏱️ Estimasi waktu: 5-10 menit 🏍️`;
 
     await this.client.sendMessage(customerPhone, message);
   }
 
-  // Send completion message to customer
+  // Send completion message to customer (CUSTOMER ONLY)
   async sendCompletionMessage(customerPhone, orderNumber, driverName) {
     const message = `✅ *PESANAN SELESAI*
 
 Terima kasih telah menggunakan layanan *Kurir Kan*! 🎉
 
-No. Pesanan: ${orderNumber}
-Driver Anda: ${driverName}
-Status: Terkirim ✓
+📋 No. Pesanan: ${orderNumber}
+👨‍💼 Driver: ${driverName}
+✓ Status: Terkirim
 
-Ingin pesan lagi? Ketik "pesan"`;
+💬 Ingin pesan lagi? Ketik "pesan" atau "menu"`;
 
     await this.client.sendMessage(customerPhone, message);
   }
 
-  // Send queue notification
+  // Send queue notification (CUSTOMER ONLY)
   async sendQueueNotification(customerPhone, orderNumber) {
     const message = `⚠️ *DRIVER SEDANG TIDAK TERSEDIA*
 
-Saat ini semua driver sedang mengantarkan pesanan.
+Mohon maaf, saat ini semua driver sedang mengantarkan pesanan.
 
-Apakah Anda ingin tetap membuat pesanan? Kami akan mencarikan driver segera setelah ada yang tersedia.
+📋 No. Pesanan: ${orderNumber}
 
-No. Pesanan: ${orderNumber}
+Apakah Anda ingin masuk antrian? Kami akan segera mencarikan driver.
 
-Balas:
-1. ✅ Ya, Tetap Pesan
-2. ❌ Batal`;
+Balas dengan:
+1 = Ya, Masuk Antrian
+2 = Tidak, Batalkan Pesanan`;
 
     await this.client.sendMessage(customerPhone, message);
   }
 
-  // Send queued confirmation
+  // Send queued confirmation (CUSTOMER ONLY)
   async sendQueuedConfirmation(customerPhone, orderNumber) {
     const message = `📝 *PESANAN MASUK ANTRIAN*
 
 Pesanan Anda (${orderNumber}) telah masuk antrian.
 
-Kami akan segera mencarikan driver untuk Anda dan akan memberitahu ketika driver sudah siap.
+✅ Kami akan segera mencarikan driver untuk Anda
+📱 Anda akan diberitahu ketika driver sudah siap
 
 Terima kasih atas kesabaran Anda! 🙏`;
 
     await this.client.sendMessage(customerPhone, message);
   }
 
-  // Send cancellation message
+  // Send cancellation message (CUSTOMER ONLY)
   async sendCancellationMessage(customerPhone, orderNumber, reason) {
     const message = `❌ *PESANAN DIBATALKAN*
 
 Mohon maaf, pesanan Anda telah dibatalkan.
 
-No. Pesanan: ${orderNumber}
-Alasan: ${reason}
+📋 No. Pesanan: ${orderNumber}
+📝 Alasan: ${reason}
 
-Silakan pesan kembali jika berminat. Ketik "pesan"`;
+💬 Silakan pesan kembali jika berminat. Ketik "pesan"`;
 
     await this.client.sendMessage(customerPhone, message);
+  }
+
+  // Send driver status update confirmation (DRIVER ONLY - GROUP)
+  async sendDriverStatusUpdate(groupId, driverName, status) {
+    const statusEmoji = status === 'On Duty' ? '🟢' : '⚪';
+    const statusText = status === 'On Duty' ? 'SIAP MENERIMA ORDERAN' : 'ISTIRAHAT';
+    
+    const message = `${statusEmoji} *STATUS UPDATE*
+
+Driver: ${driverName}
+Status: ${statusText}`;
+
+    await this.client.sendMessage(groupId, message);
   }
 }
 
