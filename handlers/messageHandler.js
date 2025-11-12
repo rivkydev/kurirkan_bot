@@ -40,7 +40,7 @@ class MessageHandler {
 
     try {
       // Normalize phone (remove @c.us dan @s.whatsapp.net)
-      const senderPhone = sender.replace('@c.us', '').replace('@s.whatsapp.net', '');
+      const senderPhone = sender.replace('@c.us', '').replace('@s.whatsapp.net', '').replace('@lid', '');
       
       // Check if driver exists
       const driver = await driverService.getDriverByPhone(senderPhone);
