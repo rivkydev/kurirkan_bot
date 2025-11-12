@@ -39,16 +39,24 @@ class MessageHandler {
     const sender = message.author || message.from;
 
     try {
+      // Normalize phone (remove @c.us dan @s.whatsapp.net)
+      const senderPhone = sender.replace('@c.us', '').replace('@s.whatsapp.net', '');
+      
       // Check if driver exists
-      const driver = await driverService.getDriverByPhone(sender);
-      if (!driver) return; // Not a registered driver
+      const driver = await driverService.getDriverByPhone(senderPhone);
+      if (!driver) {
+        console.log(`❌ Sender ${senderPhone} is not a registered driver`);
+        return;
+      }
+
+      console.log(`✅ Driver found: ${driver.name}`);
 
       // Status updates
       if (text === 'on duty') {
-        await driverService.updateDriverStatus(sender, 'On Duty');
+        await driverService.updateDriverStatus(senderPhone, 'On Duty');
         await this.client.sendMessage(
           message.from,
-          `✅ Status ${driver.name}: *ON DUTY*\nSiap menerima orderan!`
+          `✅ Status ${driver.name}: *ON DUTY*\nSiap menerima orderan! 🏍️`
         );
 
         // Check if there's queue
@@ -61,10 +69,10 @@ class MessageHandler {
             `⚠️ ${driver.name}, Anda masih memiliki orderan aktif. Selesaikan orderan terlebih dahulu.`
           );
         } else {
-          await driverService.updateDriverStatus(sender, 'Off Duty');
+          await driverService.updateDriverStatus(senderPhone, 'Off Duty');
           await this.client.sendMessage(
             message.from,
-            `✅ Status ${driver.name}: *OFF DUTY*\nIstirahat dulu ya!`
+            `✅ Status ${driver.name}: *OFF DUTY*\nIstirahat dulu ya! 😴`
           );
         }
         
@@ -81,7 +89,7 @@ class MessageHandler {
 
         await this.client.sendMessage(message.from, statusText);
         
-      } else if (text === 'queue') {
+      } else if (text === 'queue' || text === 'antrian') {
         const queueSize = await queueService.getQueueSize();
         await this.client.sendMessage(
           message.from,
@@ -103,12 +111,15 @@ class MessageHandler {
     const chatId = message.from;
     const text = message.body.trim();
     
+    // Normalize phone untuk cek driver
+    const senderPhone = chatId.replace('@c.us', '');
+    
     // Get user state
     const userState = this.userStates.get(chatId) || { step: 'idle' };
 
     try {
       // Check if this is a driver
-      const driver = await driverService.getDriverByPhone(chatId);
+      const driver = await driverService.getDriverByPhone(senderPhone);
       
       if (driver) {
         // This is a driver
@@ -133,23 +144,19 @@ class MessageHandler {
     const text = message.body.trim();
     const lowerText = text.toLowerCase();
 
-    if (lowerText === 'pesan' || lowerText === 'menu' || lowerText === '/start') {
+    if (lowerText === 'pesan' || lowerText === 'menu' || lowerText === '/start' || lowerText === 'order') {
       await this.notification.sendWelcome(chatId);
       this.userStates.set(chatId, { step: 'waiting_service_choice' });
-      return; // Langsung keluar setelah mengirim welcome
+      return;
     }
 
     switch (userState.step) {
       case 'idle':
-        // Welcome message
         await this.notification.sendWelcome(chatId);
         this.userStates.set(chatId, { step: 'waiting_service_choice' });
         break;
 
       case 'waiting_service_choice':
-        // Handle service selection (support text input)
-        const lowerText = text.toLowerCase();
-        
         if (lowerText.includes('pengiriman') || lowerText.includes('barang') || text === '1') {
           await this.notification.sendPengirimanForm(chatId);
           this.userStates.set(chatId, { step: 'waiting_pengiriman_form' });
@@ -179,7 +186,6 @@ class MessageHandler {
         break;
 
       default:
-        // Reset and send welcome
         await this.notification.sendWelcome(chatId);
         this.userStates.set(chatId, { step: 'waiting_service_choice' });
     }
@@ -187,10 +193,7 @@ class MessageHandler {
 
   // Process pengiriman form
   async processPengirimanForm(chatId, text) {
-    // Parse form
     const formData = Validator.parsePengirimanForm(text);
-    
-    // Validate
     const validation = Validator.validatePengirimanData(formData);
     
     if (!validation.valid) {
@@ -202,7 +205,6 @@ class MessageHandler {
       return;
     }
 
-    // Create order
     const customerData = {
       phone: chatId.replace('@c.us', ''),
       name: formData.namaPengirim,
@@ -210,23 +212,14 @@ class MessageHandler {
     };
 
     const order = await orderService.createOrder('Pengiriman', customerData, formData);
-    
-    // Send confirmation
     await this.notification.sendOrderConfirmation(chatId, order.orderNumber);
-
-    // Try to assign driver
     await this.tryAssignDriver(order);
-
-    // Reset user state
     this.userStates.set(chatId, { step: 'idle' });
   }
 
   // Process ojek form
   async processOjekForm(chatId, text) {
-    // Parse form
     const formData = Validator.parseOjekForm(text);
-    
-    // Validate
     const validation = Validator.validateOjekData(formData);
     
     if (!validation.valid) {
@@ -238,7 +231,6 @@ class MessageHandler {
       return;
     }
 
-    // Create order
     const customerData = {
       phone: chatId.replace('@c.us', ''),
       name: formData.namaPenumpang,
@@ -246,14 +238,8 @@ class MessageHandler {
     };
 
     const order = await orderService.createOrder('Ojek', customerData, formData);
-    
-    // Send confirmation
     await this.notification.sendOrderConfirmation(chatId, order.orderNumber);
-
-    // Try to assign driver
     await this.tryAssignDriver(order);
-
-    // Reset user state
     this.userStates.set(chatId, { step: 'idle' });
   }
 
@@ -262,7 +248,6 @@ class MessageHandler {
     const availableDrivers = await driverService.getAvailableDrivers();
 
     if (availableDrivers.length === 0) {
-      // No drivers available - queue
       await this.notification.sendQueueNotification(
         order.customer.chatId,
         order.orderNumber
@@ -276,41 +261,32 @@ class MessageHandler {
       return;
     }
 
-    // Get first available driver
     const driver = availableDrivers[0];
-    
-    // Update order status
-    await orderService.updateStatus(order._id, 'AWAITING_DRIVER');
-
-    // Send to driver with timeout
+    await orderService.updateStatus(order.orderNumber, 'AWAITING_DRIVER');
     await this.sendOrderToDriverWithTimeout(driver, order);
   }
 
   // Send order to driver with timeout mechanism
   async sendOrderToDriverWithTimeout(driver, order, timeout = 60000) {
-    const driverPhone = Validator.normalizePhone(driver.phone);
+    console.log(`📤 Sending order ${order.orderNumber} to driver ${driver.name} (${driver.phone})`);
     
-    // Send notification
-    await this.notification.sendOrderToDriver(driverPhone, order);
+    // Send notification (phone sudah dalam format 62xxx tanpa @c.us)
+    await this.notification.sendOrderToDriver(driver.phone, order, timeout / 1000);
 
-    // Set timeout
     const timeoutId = setTimeout(async () => {
-      console.log(`Driver ${driver.name} tidak merespon orderan ${order.orderNumber}`);
+      console.log(`⏰ Driver ${driver.name} tidak merespon orderan ${order.orderNumber}`);
       
-      // Check if order is still awaiting
-      const currentOrder = await orderService.getOrderById(order._id);
+      const currentOrder = await orderService.getOrderByNumber(order.orderNumber);
       if (currentOrder.status === 'AWAITING_DRIVER') {
-        // Try next driver
         await this.tryNextDriver(order);
       }
       
-      this.driverTimeouts.delete(order._id.toString());
+      this.driverTimeouts.delete(order.orderNumber);
     }, timeout);
 
-    // Store timeout
     this.driverTimeouts.set(order.orderNumber, {
       timeoutId,
-      driverId: driver._id,
+      driverId: driver.driverId,
       orderNumber: order.orderNumber
     });
   }
@@ -320,8 +296,7 @@ class MessageHandler {
     const availableDrivers = await driverService.getAvailableDrivers();
 
     if (availableDrivers.length === 0) {
-      // Add to queue
-      await queueService.addToQueue(order._id);
+      await queueService.addToQueue(order.orderNumber);
       await this.notification.sendQueuedConfirmation(
         order.customer.chatId,
         order.orderNumber
@@ -329,7 +304,6 @@ class MessageHandler {
       return;
     }
 
-    // Send to next driver
     const nextDriver = availableDrivers[0];
     await this.sendOrderToDriverWithTimeout(nextDriver, order);
   }
@@ -339,11 +313,10 @@ class MessageHandler {
     const chatId = message.from;
     const text = message.body.trim().toLowerCase();
 
-    // Check for order acceptance/rejection
-    if (text.includes('ambil') || text.includes('terima') || text.includes('✅') || text === '1') {
+    if (text.includes('terima') || text.includes('ambil') || text === '1') {
       await this.handleDriverAcceptOrder(driver, chatId);
       
-    } else if (text.includes('tolak') || text.includes('❌') || text === '2') {
+    } else if (text.includes('tolak') || text === '2') {
       await this.handleDriverRejectOrder(driver, chatId);
       
     } else if (text.includes('selesai') || text.includes('complete')) {
@@ -362,11 +335,10 @@ class MessageHandler {
 
   // Handle driver accept order
   async handleDriverAcceptOrder(driver, chatId) {
-    // Find pending timeout for this driver
     let orderId = null;
     
     for (const [oid, data] of this.driverTimeouts.entries()) {
-      if (data.driverId.toString() === driver._id.toString()) {
+      if (data.driverId === driver.driverId) {
         orderId = oid;
         clearTimeout(data.timeoutId);
         this.driverTimeouts.delete(oid);
@@ -379,18 +351,12 @@ class MessageHandler {
       return;
     }
 
-    // Get order
-    const order = await orderService.getOrderById(orderId);
-    
-    // Assign driver
-    await orderService.assignDriver(order._id, driver._id);
-    await driverService.assignOrder(driver._id, order._id);
+    const order = await orderService.getOrderByNumber(orderId);
+    await orderService.assignDriver(order.orderNumber, driver.driverId);
+    await driverService.assignOrder(driver.driverId, order.orderNumber);
 
-    // Send details to driver
     const orderDetails = orderService.formatOrderDetails(order);
     await this.notification.sendOrderDetailsToDriver(chatId, orderDetails);
-
-    // Notify customer
     await this.notification.sendDriverFound(
       order.customer.chatId,
       driver.name,
@@ -405,14 +371,13 @@ class MessageHandler {
 
   // Handle driver reject order
   async handleDriverRejectOrder(driver, chatId) {
-    // Find and clear timeout
     let order = null;
     
     for (const [oid, data] of this.driverTimeouts.entries()) {
-      if (data.driverId.toString() === driver._id.toString()) {
+      if (data.driverId === driver.driverId) {
         clearTimeout(data.timeoutId);
         this.driverTimeouts.delete(oid);
-        order = await orderService.getOrderById(oid);
+        order = await orderService.getOrderByNumber(oid);
         break;
       }
     }
@@ -423,8 +388,6 @@ class MessageHandler {
     }
 
     await this.client.sendMessage(chatId, `Orderan ${order.orderNumber} ditolak.`);
-
-    // Try next driver
     await this.tryNextDriver(order);
   }
 
@@ -435,15 +398,9 @@ class MessageHandler {
       return;
     }
 
-    const order = await orderService.getOrderById(driver.currentOrder);
-    
-    // Update order status
-    await orderService.updateStatus(order._id, 'DELIVERED', 'Completed by driver');
-
-    // Release driver
-    await driverService.releaseDriver(driver._id);
-
-    // Notify customer
+    const order = await orderService.getOrderByNumber(driver.currentOrder);
+    await orderService.updateStatus(order.orderNumber, 'DELIVERED', 'Completed by driver');
+    await driverService.releaseDriver(driver.driverId);
     await this.notification.sendCompletionMessage(
       order.customer.chatId,
       order.orderNumber,
@@ -455,7 +412,6 @@ class MessageHandler {
       `✅ Orderan ${order.orderNumber} selesai!\n\nTerima kasih! Anda sudah siap menerima orderan baru.`
     );
 
-    // Process queue
     await this.processQueue();
   }
 
@@ -466,21 +422,11 @@ class MessageHandler {
       return;
     }
 
-    // Ask for reason
-    await this.client.sendMessage(
-      chatId,
-      'Mohon berikan alasan pembatalan:'
-    );
-
-    // Wait for reason (simplified - in production use proper state management)
-    // For now, we'll cancel with generic reason
-    const order = await orderService.getOrderById(driver.currentOrder);
+    const order = await orderService.getOrderByNumber(driver.currentOrder);
     const reason = 'Dibatalkan oleh customer (via driver)';
     
-    await orderService.cancelOrder(order._id, reason);
-    await driverService.releaseDriver(driver._id);
-
-    // Notify customer
+    await orderService.cancelOrder(order.orderNumber, reason);
+    await driverService.releaseDriver(driver.driverId);
     await this.notification.sendCancellationMessage(
       order.customer.chatId,
       order.orderNumber,
@@ -492,7 +438,6 @@ class MessageHandler {
       `Orderan ${order.orderNumber} dibatalkan.\n\nAnda sudah siap menerima orderan baru.`
     );
 
-    // Process queue
     await this.processQueue();
   }
 
@@ -501,23 +446,18 @@ class MessageHandler {
     const lowerText = text.toLowerCase();
     
     if (lowerText.includes('ya') || lowerText.includes('iya') || text === '1') {
-      // Add to queue
       await queueService.addToQueue(userState.orderId);
-      
-      const order = await orderService.getOrderById(userState.orderId);
+      const order = await orderService.getOrderByNumber(userState.orderId);
       await this.notification.sendQueuedConfirmation(chatId, order.orderNumber);
       
     } else {
-      // Cancel order
       await orderService.cancelOrder(userState.orderId, 'Dibatalkan oleh customer - tidak ada driver');
-      
       await this.client.sendMessage(
         chatId,
         '❌ Pesanan dibatalkan.\n\nSilakan pesan lagi nanti. Terima kasih!'
       );
     }
 
-    // Reset state
     this.userStates.set(chatId, { step: 'idle' });
   }
 
@@ -531,16 +471,12 @@ class MessageHandler {
     
     if (availableDrivers.length === 0) return;
 
-    // Remove from queue
     await queueService.removeFromQueue(queueItem._id);
 
-    // Assign to driver
     const driver = availableDrivers[0];
     const order = queueItem.order;
 
     await this.sendOrderToDriverWithTimeout(driver, order);
-
-    // Notify customer
     await this.client.sendMessage(
       order.customer.chatId,
       `✅ Driver ditemukan untuk pesanan Anda (${order.orderNumber})!\n\nDriver akan segera menghubungi Anda.`
