@@ -107,7 +107,7 @@ Balas:
 2. ❌ Tolak`;
 
       // Kirim ke chatId driver yang sebenarnya
-      await this.client.sendMessage(driver.phone + '@c.us', message);
+      await this.client.sendMessage(driver.phone + '@lid', message);
       
       console.log(`✅ Order ${order.orderNumber} sent to driver ${driver.name} (${driver.phone})`);
       

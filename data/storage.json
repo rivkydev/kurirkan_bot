@@ -6,17 +6,61 @@
         "driverId": "DRV001",
         "name": "Muhammad Rivky",
         "phone": "8637615485122",
-        "status": "Off Duty",
+        "status": "On Duty",
         "currentOrder": null,
         "totalOrders": 0,
         "todayOrders": 0,
-        "lastStatusUpdate": "2025-11-12T17:12:12.848Z",
+        "lastStatusUpdate": "2025-11-12T17:23:48.481Z",
         "createdAt": "2025-11-12T17:12:12.848Z"
       }
     ]
   ],
-  "orders": [],
+  "orders": [
+    [
+      "KRK-20251112-001",
+      {
+        "orderNumber": "KRK-20251112-001",
+        "orderType": "Pengiriman",
+        "status": "AWAITING_DRIVER",
+        "customer": {
+          "phone": "8637615485122@lid",
+          "name": "martin",
+          "chatId": "8637615485122@lid"
+        },
+        "assignedDriver": null,
+        "assignedAt": null,
+        "completedAt": null,
+        "cancelledAt": null,
+        "cancellationReason": null,
+        "timeline": [
+          {
+            "status": "NEW",
+            "timestamp": "2025-11-12T17:24:11.938Z",
+            "note": "Order created"
+          },
+          {
+            "status": "AWAITING_DRIVER",
+            "timestamp": "2025-11-12T17:24:12.045Z",
+            "note": ""
+          }
+        ],
+        "createdAt": "2025-11-12T17:24:11.938Z",
+        "pengiriman": {
+          "namaPengirim": "martin",
+          "nomorHpPengirim": "085823358559",
+          "lokasiPengambilan": "jalan daeng pawero no 6",
+          "deskripsiPesanan": "ayam geprek",
+          "namaPenerima": "tinus",
+          "nomorHpPenerima": "085213442540",
+          "lokasiPengantaran": "jalan kejayaan raya no 10",
+          "waktuDiinginkan": "15:00",
+          "metodePembayaran": "COD",
+          "catatanTambahan": "jangan lama gre"
+        }
+      }
+    ]
+  ],
   "queue": [],
-  "orderCounter": 0,
-  "exportedAt": "2025-11-12T17:22:25.355Z"
+  "orderCounter": 1,
+  "exportedAt": "2025-11-12T17:28:22.659Z"
 }
