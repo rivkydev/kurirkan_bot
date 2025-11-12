@@ -131,6 +131,13 @@ class MessageHandler {
   async handleCustomerMessage(message, userState) {
     const chatId = message.from;
     const text = message.body.trim();
+    const lowerText = text.toLowerCase();
+
+    if (lowerText === 'pesan' || lowerText === 'menu' || lowerText === '/start') {
+      await this.notification.sendWelcome(chatId);
+      this.userStates.set(chatId, { step: 'waiting_service_choice' });
+      return; // Langsung keluar setelah mengirim welcome
+    }
 
     switch (userState.step) {
       case 'idle':
