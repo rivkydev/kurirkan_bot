@@ -1,52 +1,40 @@
 // ============================================
-// FILE: services/notificationService.js
+// FILE: services/notificationService.js (FIXED)
 // ============================================
-const { Buttons } = require('whatsapp-web.js');
-
 
 class NotificationService {
   constructor(client) {
     this.client = client;
   }
 
-  // GANTI FUNGSI LAMA ANDA DENGAN YANG INI
-  async sendButtons(to, text, buttons) {
+  // Send text with numbered options (no buttons)
+  async sendOptions(to, text, options) {
     try {
-      // Buat objek tombol menggunakan kelas Buttons
-      const buttonMessage = new Buttons(
-        text, // Body
-        buttons.map((btn, idx) => ({ // Buttons
-          id: btn.id || `btn_${idx}`,
-          body: btn.text
-        })),
-        null, // Title (opsional, bisa null)
-        'Kurir Kan - Layanan Kurir Terpercaya' // Footer
-      );
-
-      await this.client.sendMessage(to, buttonMessage);
-
-    } catch (error) {
-      console.error('Error sending buttons:', error);
-      // Fallback: send text with numbered options
-      let fallbackText = text + '\n\n';
-      buttons.forEach((btn, idx) => {
-        fallbackText += `${idx + 1}. ${btn.text}\n`;
+      let message = text + '\n\n';
+      options.forEach((opt, idx) => {
+        message += `${idx + 1}. ${opt.text}\n`;
       });
-      fallbackText += '\nBalas dengan nomor pilihan Anda.';
-      await this.client.sendMessage(to, fallbackText);
+      message += '\n_Balas dengan nomor pilihan Anda_';
+      
+      await this.client.sendMessage(to, message);
+    } catch (error) {
+      console.error('Error sending options:', error);
+      await this.client.sendMessage(to, text);
     }
   }
 
   // Send welcome message
   async sendWelcome(to) {
-    await this.sendButtons(
-      to,
-      'Halo! Selamat datang di *Kurir Kan*\n\nSilakan pilih layanan yang Anda butuhkan:',
-      [
-        { id: 'btn_pengiriman', text: '📦 Pengiriman Barang' },
-        { id: 'btn_ojek', text: '🏍️ Ojek/Antar Jemput' }
-      ]
-    );
+    const text = `Halo! Selamat datang di *Kurir Kan* 🚀
+
+Silakan pilih layanan yang Anda butuhkan:
+
+1. 📦 Pengiriman Barang
+2. 🏍️ Ojek/Antar Jemput
+
+_Balas dengan nomor pilihan (1 atau 2)_`;
+    
+    await this.client.sendMessage(to, text);
   }
 
   // Send pengiriman form
@@ -94,42 +82,54 @@ _Kirim form yang sudah diisi!_`;
     await this.client.sendMessage(to, formText);
   }
 
-  // Send order to driver
+  // Send order to driver (FIXED)
   async sendOrderToDriver(driverPhone, order, timeout = 60) {
-    const message = `🔔 *ORDERAN BARU*
+    try {
+      // PERBAIKAN: Gunakan chatId asli driver, jangan normalize
+      const driver = require('../storage/inMemoryStorage').getDriverByPhone(driverPhone.replace('@c.us', ''));
+      
+      if (!driver) {
+        console.error('❌ Driver not found:', driverPhone);
+        return;
+      }
 
-Hai! Ada orderan baru nih, mau ambil?
+      const message = `🔔 *ORDERAN BARU*
+
+Hai ${driver.name}! Ada orderan baru nih, mau ambil?
 
 No. Pesanan: *${order.orderNumber}*
 Jenis: ${order.orderType}
 
-⏰ Respon dalam ${timeout} detik`;
+⏰ Respon dalam ${timeout} detik
 
-    await this.sendButtons(
-      driverPhone,
-      message,
-      [
-        { id: 'accept_' + order._id, text: '✅ Ambil Orderan' },
-        { id: 'reject_' + order._id, text: '❌ Tolak' }
-      ]
-    );
+Balas:
+1. ✅ Terima Orderan
+2. ❌ Tolak`;
+
+      // Kirim ke chatId driver yang sebenarnya
+      await this.client.sendMessage(driver.phone + '@c.us', message);
+      
+      console.log(`✅ Order ${order.orderNumber} sent to driver ${driver.name} (${driver.phone})`);
+      
+    } catch (error) {
+      console.error('Error sending order to driver:', error);
+    }
   }
 
   // Send order details to driver
   async sendOrderDetailsToDriver(driverPhone, orderDetails) {
-    await this.client.sendMessage(driverPhone, orderDetails);
-    
-    // Send action buttons
-    const buttons = [
-      { id: 'complete_order', text: '✅ Selesai' },
-      { id: 'cancel_order', text: '❌ Dibatalkan Customer' }
-    ];
-
-    await this.sendButtons(
-      driverPhone,
-      'Pilih aksi untuk orderan ini:',
-      buttons
-    );
+    try {
+      await this.client.sendMessage(driverPhone, orderDetails);
+      
+      const actionText = `\n_Setelah selesai, kirim:_
+- "selesai" untuk menyelesaikan orderan
+- "batal" untuk membatalkan orderan`;
+      
+      await this.client.sendMessage(driverPhone, actionText);
+      
+    } catch (error) {
+      console.error('Error sending order details:', error);
+    }
   }
 
   // Send order confirmation to customer
@@ -141,7 +141,7 @@ Terima kasih! Pesanan Anda telah kami terima.
 No. Pesanan: *${orderNumber}*
 
 Kami sedang mencarikan driver untuk Anda.
-Mohon tunggu sebentar...`;
+Mohon tunggu sebentar... ⏳`;
 
     await this.client.sendMessage(customerPhone, message);
   }
@@ -154,7 +154,7 @@ Driver Anda: *${driverName}*
 No. Pesanan: ${orderNumber}
 
 Driver akan segera menghubungi Anda.
-Estimasi waktu: 5-10 menit`;
+Estimasi waktu: 5-10 menit 🏍️`;
 
     await this.client.sendMessage(customerPhone, message);
   }
@@ -163,19 +163,15 @@ Estimasi waktu: 5-10 menit`;
   async sendCompletionMessage(customerPhone, orderNumber, driverName) {
     const message = `✅ *PESANAN SELESAI*
 
-Terima kasih telah menggunakan layanan *Kurir Kan*!
+Terima kasih telah menggunakan layanan *Kurir Kan*! 🎉
 
 No. Pesanan: ${orderNumber}
 Driver Anda: ${driverName}
 Status: Terkirim ✓
 
-Ingin pesan lagi? Ketik /order atau pilih menu di bawah.`;
+Ingin pesan lagi? Ketik "pesan"`;
 
-    await this.sendButtons(
-      customerPhone,
-      message,
-      [{ id: 'new_order', text: '📦 Order Baru' }]
-    );
+    await this.client.sendMessage(customerPhone, message);
   }
 
   // Send queue notification
@@ -186,16 +182,13 @@ Saat ini semua driver sedang mengantarkan pesanan.
 
 Apakah Anda ingin tetap membuat pesanan? Kami akan mencarikan driver segera setelah ada yang tersedia.
 
-No. Pesanan: ${orderNumber}`;
+No. Pesanan: ${orderNumber}
 
-    await this.sendButtons(
-      customerPhone,
-      message,
-      [
-        { id: 'queue_yes', text: '✅ Ya, Tetap Pesan' },
-        { id: 'queue_no', text: '❌ Batal' }
-      ]
-    );
+Balas:
+1. ✅ Ya, Tetap Pesan
+2. ❌ Batal`;
+
+    await this.client.sendMessage(customerPhone, message);
   }
 
   // Send queued confirmation
@@ -220,7 +213,7 @@ Mohon maaf, pesanan Anda telah dibatalkan.
 No. Pesanan: ${orderNumber}
 Alasan: ${reason}
 
-Silakan pesan kembali jika berminat.`;
+Silakan pesan kembali jika berminat. Ketik "pesan"`;
 
     await this.client.sendMessage(customerPhone, message);
   }

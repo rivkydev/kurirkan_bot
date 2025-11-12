@@ -1,12 +1,13 @@
 // ============================================
-// FILE: services/driverService.js (IN-MEMORY)
+// FILE: services/driverService.js (FIXED)
 // ============================================
 
 const storage = require('../storage/inMemoryStorage');
 
 class DriverService {
   updateDriverStatus(phone, status) {
-    const normalizedPhone = phone.replace('@c.us', '');
+    // Jangan normalize, gunakan phone asli
+    const normalizedPhone = phone.replace('@c.us', '').replace('@s.whatsapp.net', '');
     
     const driver = storage.getDriverByPhone(normalizedPhone);
     if (!driver) {
@@ -34,7 +35,8 @@ class DriverService {
   }
 
   getDriverByPhone(phone) {
-    const normalizedPhone = phone.replace('@c.us', '');
+    // Normalize phone - remove semua suffix
+    const normalizedPhone = phone.replace('@c.us', '').replace('@s.whatsapp.net', '');
     return storage.getDriverByPhone(normalizedPhone);
   }
 
