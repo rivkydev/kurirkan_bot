@@ -6,7 +6,7 @@ class Validator {
   static validatePhone(phone) {
     // Format: 08xxx atau 628xxx
     const phoneRegex = /^(08|628)\d{8,12}$/;
-    return phoneRegex.test(phone.replace(/[\s-]/g, ''));
+    return phoneRegex.test(phone.replace(/[^\d]/g, ''));
   }
 
   static normalizePhone(phone) {
