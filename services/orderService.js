@@ -1,8 +1,10 @@
 // ============================================
-// FILE: services/orderService.js (IN-MEMORY)
+// FILE: services/orderService.js (UPDATED WITH PRICING)
 // ============================================
 
 const storage = require('../storage/inMemoryStorage');
+const config = require('../config/config');
+const Formatter = require('../utils/formatter');
 
 class OrderService {
   createOrder(orderType, customerData, orderData) {
@@ -30,9 +32,16 @@ class OrderService {
   }
 
   formatOrderDetails(order) {
+    // Get pricing based on order type
+    const tarif = order.orderType === 'Pengiriman' 
+      ? config.pricing.pengiriman 
+      : config.pricing.ojek;
+    const tarifFormatted = Formatter.formatCurrency(tarif);
+
     let details = `📋 *DETAIL ORDERAN*\n\n`;
     details += `No. Pesanan: *${order.orderNumber}*\n`;
-    details += `Jenis: ${order.orderType}\n\n`;
+    details += `Jenis: ${order.orderType}\n`;
+    details += `💰 Tarif: ${tarifFormatted}\n\n`;
 
     if (order.orderType === 'Pengiriman') {
       const p = order.pengiriman;

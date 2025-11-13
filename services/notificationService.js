@@ -1,6 +1,9 @@
 // ============================================
-// FILE: services/notificationService.js (FIXED)
+// FILE: services/notificationService.js (UPDATED WITH PRICING)
 // ============================================
+
+const config = require('../config/config');
+const Formatter = require('../utils/formatter');
 
 class NotificationService {
   constructor(client) {
@@ -23,23 +26,29 @@ class NotificationService {
     }
   }
 
-  // Send welcome message (CUSTOMER ONLY)
+  // Send welcome message (CUSTOMER ONLY) - WITH PRICING
   async sendWelcome(to) {
+    const pengirimanTarif = Formatter.formatCurrency(config.pricing.pengiriman);
+    const ojekTarif = Formatter.formatCurrency(config.pricing.ojek);
+    
     const text = `Halo! Selamat datang di *Kurir Kan* 🚀
 
 Silakan pilih layanan yang Anda butuhkan:
 
-1. 📦 Pengiriman Barang
-2. 🏍️ Ojek/Antar Jemput
+1. 📦 Pengiriman Barang - ${pengirimanTarif}
+2. 🏍️ Ojek/Antar Jemput - ${ojekTarif}
 
 _Balas dengan nomor pilihan (1 atau 2)_`;
     
     await this.client.sendMessage(to, text);
   }
 
-  // Send pengiriman form (CUSTOMER ONLY)
+  // Send pengiriman form (CUSTOMER ONLY) - WITH PRICING
   async sendPengirimanForm(to) {
+    const tarif = Formatter.formatCurrency(config.pricing.pengiriman);
+    
     const formText = `📋 *FORM PEMESANAN PENGIRIMAN*
+💰 Tarif: ${tarif}
 
 Silakan isi form berikut dengan format yang benar:
 
@@ -60,9 +69,12 @@ _Kirim form yang sudah diisi!_`;
     await this.client.sendMessage(to, formText);
   }
 
-  // Send ojek form (CUSTOMER ONLY)
+  // Send ojek form (CUSTOMER ONLY) - WITH PRICING
   async sendOjekForm(to) {
+    const tarif = Formatter.formatCurrency(config.pricing.ojek);
+    
     const formText = `📋 *FORM PEMESANAN OJEK*
+💰 Tarif: ${tarif}
 
 Silakan isi form berikut dengan format yang benar:
 
@@ -118,7 +130,7 @@ Balas dengan:
     }
   }
 
-  // Send FULL order details to driver (AFTER ACCEPTANCE)
+  // Send FULL order details to driver (AFTER ACCEPTANCE) - WITH PRICING
   async sendOrderDetailsToDriver(driverChatId, orderDetails) {
     try {
       // Kirim detail lengkap orderan
@@ -140,7 +152,7 @@ _Selamat bekerja! 🏍️_`;
     }
   }
 
-  // Send order confirmation to customer (CUSTOMER ONLY)
+  // Send order confirmation to customer (CUSTOMER ONLY) - WITH PRICING
   async sendOrderConfirmation(customerPhone, orderNumber) {
     const message = `✅ *PESANAN DITERIMA*
 
@@ -154,7 +166,7 @@ Terima kasih! Pesanan Anda telah kami terima.
     await this.client.sendMessage(customerPhone, message);
   }
 
-  // Send driver found notification (CUSTOMER ONLY)
+  // Send driver found notification (CUSTOMER ONLY) - WITH PRICING
   async sendDriverFound(customerPhone, driverName, orderNumber) {
     const message = `✅ *DRIVER DITEMUKAN!*
 
@@ -167,7 +179,7 @@ Terima kasih! Pesanan Anda telah kami terima.
     await this.client.sendMessage(customerPhone, message);
   }
 
-  // Send completion message to customer (CUSTOMER ONLY)
+  // Send completion message to customer (CUSTOMER ONLY) - WITH PRICING INFO
   async sendCompletionMessage(customerPhone, orderNumber, driverName) {
     const message = `✅ *PESANAN SELESAI*
 
@@ -176,6 +188,8 @@ Terima kasih telah menggunakan layanan *Kurir Kan*! 🎉
 📋 No. Pesanan: ${orderNumber}
 👨‍💼 Driver: ${driverName}
 ✓ Status: Terkirim
+
+💰 Silakan selesaikan pembayaran sesuai metode yang dipilih
 
 💬 Ingin pesan lagi? Ketik "pesan" atau "menu"`;
 

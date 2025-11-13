@@ -1,5 +1,5 @@
 // ============================================
-// FILE: config/config.js
+// FILE: config/config.js (UPDATED WITH PRICING)
 // ============================================
 
 module.exports = {
@@ -18,6 +18,12 @@ module.exports = {
     timeout: 60000, // 60 detik untuk driver response
     queueCheckInterval: 5000, // Cek queue setiap 5 detik
     orderPrefix: 'KRK'
+  },
+
+  // Pricing (dalam Rupiah)
+  pricing: {
+    pengiriman: 7000,  // Rp 7.000
+    ojek: 10000        // Rp 10.000
   },
 
   // Groups & Numbers
