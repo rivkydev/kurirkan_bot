@@ -1,3 +1,7 @@
+// ============================================
+// FILE: services/notificationService.js (FIXED)
+// ============================================
+
 class NotificationService {
   constructor(client) {
     this.client = client;
