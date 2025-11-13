@@ -10,7 +10,7 @@ const Formatter = require('../utils/formatter');
 
 class AdminService {
   isAdmin(phone) {
-    const normalizedPhone = phone.replace('@c.us', '').replace(/^0/, '62');
+    const normalizedPhone = phone.replace('@lid', '').replace(/^0/, '62');
     const adminNumbers = ['8637615485122']; // Sesuaikan dengan nomor admin Anda
     return adminNumbers.includes(normalizedPhone);
   }

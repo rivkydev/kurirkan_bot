@@ -10,7 +10,7 @@
         "currentOrder": null,
         "totalOrders": 1,
         "todayOrders": 1,
-        "lastStatusUpdate": "2025-11-12T19:48:41.265Z",
+        "lastStatusUpdate": "2025-11-13T18:21:23.735Z",
         "createdAt": "2025-11-12T17:12:12.848Z"
       }
     ]
@@ -158,5 +158,5 @@
   ],
   "queue": [],
   "orderCounter": 3,
-  "exportedAt": "2025-11-13T18:20:22.022Z"
+  "exportedAt": "2025-11-13T18:22:56.065Z"
 }
