@@ -16,7 +16,7 @@ module.exports = {
   // Business Logic
   order: {
     timeout: 60000, // 60 detik untuk driver response
-    queueCheckInterval: 5000, // Cek queue setiap 5 detik
+    queueCheckInterval: 2500, // Cek queue setiap 5 detik
     orderPrefix: 'KRK'
   },
 
