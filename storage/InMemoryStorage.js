@@ -1,5 +1,5 @@
 // ============================================
-// FILE: storage/inMemoryStorage.js (FIXED PRIORITY)
+// FILE: storage/inMemoryStorage.js (WITH ADMIN FEATURES)
 // ============================================
 
 class InMemoryStorage {
@@ -9,15 +9,125 @@ class InMemoryStorage {
     this.orders = new Map();  // orderNumber -> order object
     this.queue = [];          // Array of order objects
     this.userStates = new Map(); // chatId -> user state
+    this.deposits = new Map(); // driverId -> [deposits]
+    this.registrationTokens = new Map(); // token -> {phone, name, expiresAt}
     
     // Indexes untuk query cepat
     this.driversByPhone = new Map(); // phone -> driverId
+    this.driversByLID = new Map(); // LID -> driverId
     this.ordersByCustomer = new Map(); // phone -> [orderNumbers]
     this.activeOrders = new Set(); // Set of active orderNumbers
     
     // Counters
     this.orderCounter = 0;
     this.driverCounter = 0;
+    
+    // Admin settings
+    this.adminLID = '8637615485122'; // DRV001 LID (detected from chat)
+    this.dailyDepositRequired = 5000; // Rp 5.000
+  }
+
+  // ========== ADMIN METHODS ==========
+  
+  isAdmin(lid) {
+    // LID format: 8637615485122 (without @lid suffix)
+    const normalizedLID = lid.replace('@lid', '').replace('@c.us', '').replace(/[\s-]/g, '');
+    return normalizedLID === this.adminLID;
+  }
+
+  // Generate registration token
+  generateRegistrationToken(phone, name) {
+    const token = Math.random().toString(36).substring(2, 7).toUpperCase();
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+    
+    this.registrationTokens.set(token, {
+      phone,
+      name,
+      expiresAt,
+      createdAt: new Date()
+    });
+    
+    return token;
+  }
+
+  // Validate and use registration token
+  useRegistrationToken(token, lid) {
+    const tokenData = this.registrationTokens.get(token);
+    
+    if (!tokenData) {
+      throw new Error('Token tidak valid');
+    }
+    
+    if (new Date() > tokenData.expiresAt) {
+      this.registrationTokens.delete(token);
+      throw new Error('Token sudah expired');
+    }
+    
+    // Generate driver ID
+    const driverCount = this.drivers.size;
+    const driverId = `DRV${String(driverCount + 1).padStart(3, '0')}`;
+    
+    // Create driver with actual LID
+    const driver = {
+      driverId,
+      name: tokenData.name,
+      phone: tokenData.phone,
+      lid: lid.replace('@lid', ''),
+      status: 'Off Duty',
+      currentOrder: null,
+      totalOrders: 0,
+      todayOrders: 0,
+      isActive: true,
+      isSuspended: false,
+      suspensionReason: null,
+      lastStatusUpdate: new Date(),
+      createdAt: new Date()
+    };
+
+    this.drivers.set(driverId, driver);
+    this.driversByPhone.set(driver.phone, driverId);
+    this.driversByLID.set(driver.lid, driverId);
+    
+    // Delete used token
+    this.registrationTokens.delete(token);
+    
+    return driver;
+  }
+
+  // Deposit tracking
+  recordDeposit(driverId, amount, date = new Date()) {
+    if (!this.deposits.has(driverId)) {
+      this.deposits.set(driverId, []);
+    }
+    
+    const deposit = {
+      amount,
+      date,
+      recordedAt: new Date()
+    };
+    
+    this.deposits.get(driverId).push(deposit);
+    return deposit;
+  }
+
+  getDriverDeposits(driverId, date = new Date()) {
+    const deposits = this.deposits.get(driverId) || [];
+    const startOfDay = new Date(date.setHours(0, 0, 0, 0));
+    const endOfDay = new Date(date.setHours(23, 59, 59, 999));
+    
+    return deposits.filter(d => 
+      new Date(d.date) >= startOfDay && new Date(d.date) <= endOfDay
+    );
+  }
+
+  getTotalDeposit(driverId, date = new Date()) {
+    const deposits = this.getDriverDeposits(driverId, date);
+    return deposits.reduce((sum, d) => sum + d.amount, 0);
+  }
+
+  hasDepositedToday(driverId) {
+    const total = this.getTotalDeposit(driverId);
+    return total >= this.dailyDepositRequired;
   }
 
   // ========== DRIVER METHODS ==========
@@ -31,12 +141,36 @@ class InMemoryStorage {
       currentOrder: null,
       totalOrders: 0,
       todayOrders: 0,
+      isActive: true,
+      isSuspended: false,
+      suspensionReason: null,
       lastStatusUpdate: new Date(),
       createdAt: new Date()
     };
 
     this.drivers.set(driverId, driver);
     this.driversByPhone.set(driver.phone, driverId);
+    
+    return driver;
+  }
+
+  suspendDriver(driverId, reason) {
+    const driver = this.drivers.get(driverId);
+    if (!driver) throw new Error('Driver tidak ditemukan');
+
+    driver.isSuspended = true;
+    driver.suspensionReason = reason;
+    driver.status = 'Off Duty';
+    
+    return driver;
+  }
+
+  activateDriver(driverId) {
+    const driver = this.drivers.get(driverId);
+    if (!driver) throw new Error('Driver tidak ditemukan');
+
+    driver.isSuspended = false;
+    driver.suspensionReason = null;
     
     return driver;
   }
@@ -58,6 +192,11 @@ class InMemoryStorage {
   updateDriverStatus(driverId, status) {
     const driver = this.drivers.get(driverId);
     if (!driver) throw new Error('Driver not found');
+
+    // Check if suspended
+    if (driver.isSuspended && status === 'On Duty') {
+      throw new Error('Driver disuspend. Hubungi admin.');
+    }
 
     driver.status = status;
     driver.lastStatusUpdate = new Date();
@@ -87,22 +226,22 @@ class InMemoryStorage {
     return driver;
   }
 
-  // FIXED: Prioritize driver with LEAST orders today
   getAvailableDrivers() {
     const available = Array.from(this.drivers.values())
-      .filter(d => d.status === 'On Duty' && !d.currentOrder);
+      .filter(d => 
+        d.status === 'On Duty' && 
+        !d.currentOrder && 
+        !d.isSuspended
+      );
     
-    // Sort by todayOrders ASC (paling sedikit orderan di prioritaskan)
+    // Sort by todayOrders ASC (least orders first)
     available.sort((a, b) => {
-      // Primary: Sort by todayOrders (ascending - least orders first)
       if (a.todayOrders !== b.todayOrders) {
         return a.todayOrders - b.todayOrders;
       }
-      // Secondary: If same orders, sort by totalOrders (ascending)
       if (a.totalOrders !== b.totalOrders) {
         return a.totalOrders - b.totalOrders;
       }
-      // Tertiary: Random to be fair
       return Math.random() - 0.5;
     });
     
@@ -149,7 +288,6 @@ class InMemoryStorage {
       createdAt: new Date()
     };
 
-    // Set order-specific data
     if (orderType === 'Pengiriman') {
       order.pengiriman = orderData;
     } else if (orderType === 'Ojek') {
@@ -159,7 +297,6 @@ class InMemoryStorage {
     this.orders.set(orderNumber, order);
     this.activeOrders.add(orderNumber);
     
-    // Index by customer
     const customerOrders = this.ordersByCustomer.get(customerData.phone) || [];
     customerOrders.push(orderNumber);
     this.ordersByCustomer.set(customerData.phone, customerOrders);
@@ -284,7 +421,6 @@ class InMemoryStorage {
     const cancelledOrders = ordersToday.filter(o => o.status === 'CANCELLED').length;
     const activeOrders = this.activeOrders.size;
 
-    // Calculate avg completion time
     const completedWithTime = ordersToday.filter(o => 
       o.status === 'DELIVERED' && o.completedAt && o.createdAt
     );
@@ -294,7 +430,7 @@ class InMemoryStorage {
       const totalTime = completedWithTime.reduce((sum, o) => 
         sum + (o.completedAt - o.createdAt), 0
       );
-      avgCompletionTime = Math.round((totalTime / completedWithTime.length) / 60000); // minutes
+      avgCompletionTime = Math.round((totalTime / completedWithTime.length) / 60000);
     }
 
     return {
@@ -330,13 +466,15 @@ class InMemoryStorage {
     return deletedCount;
   }
 
-  // ========== PERSISTENCE (OPTIONAL) ==========
+  // ========== PERSISTENCE ==========
   
   exportData() {
     return {
       drivers: Array.from(this.drivers.entries()),
       orders: Array.from(this.orders.entries()),
       queue: this.queue,
+      deposits: Array.from(this.deposits.entries()),
+      registrationTokens: Array.from(this.registrationTokens.entries()),
       orderCounter: this.orderCounter,
       exportedAt: new Date()
     };
@@ -345,7 +483,6 @@ class InMemoryStorage {
   importData(data) {
     if (data.drivers) {
       this.drivers = new Map(data.drivers);
-      // Rebuild indexes
       this.driversByPhone.clear();
       for (const [driverId, driver] of this.drivers) {
         this.driversByPhone.set(driver.phone, driverId);
@@ -354,17 +491,14 @@ class InMemoryStorage {
 
     if (data.orders) {
       this.orders = new Map(data.orders);
-      // Rebuild indexes
       this.ordersByCustomer.clear();
       this.activeOrders.clear();
       
       for (const [orderNumber, order] of this.orders) {
-        // Customer index
         const customerOrders = this.ordersByCustomer.get(order.customer.phone) || [];
         customerOrders.push(orderNumber);
         this.ordersByCustomer.set(order.customer.phone, customerOrders);
         
-        // Active orders
         if (['NEW', 'AWAITING_DRIVER', 'ASSIGNED', 'PICKED_UP', 'IN_TRANSIT'].includes(order.status)) {
           this.activeOrders.add(orderNumber);
         }
@@ -375,6 +509,10 @@ class InMemoryStorage {
       this.queue = data.queue;
     }
 
+    if (data.deposits) {
+      this.deposits = new Map(data.deposits);
+    }
+
     if (data.orderCounter) {
       this.orderCounter = data.orderCounter;
     }
@@ -382,7 +520,6 @@ class InMemoryStorage {
     return true;
   }
 
-  // Save to JSON file (optional persistence)
   saveToFile(filepath = './data/storage.json') {
     const fs = require('fs');
     const path = require('path');
@@ -415,7 +552,6 @@ class InMemoryStorage {
   }
 }
 
-// Singleton instance
 const storage = new InMemoryStorage();
 
 module.exports = storage;
