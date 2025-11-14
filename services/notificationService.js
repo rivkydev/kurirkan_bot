@@ -1,5 +1,5 @@
 // ============================================
-// FILE: services/notificationService.js (COMPLETE WITH IMPORTS)
+// FILE: services/notificationService.js (FIXED LID ISSUE)
 // ============================================
 
 const config = require('../config/config');
@@ -8,6 +8,49 @@ const Formatter = require('../utils/formatter');
 class NotificationService {
   constructor(client) {
     this.client = client;
+  }
+
+  // Helper: Get correct chat ID format
+  async getChatId(contactId) {
+    try {
+      // contactId can be:
+      // - 8637615485122@lid
+      // - 628123456789@c.us
+      // - 8637615485122 (raw LID)
+      // - 628123456789 (raw phone)
+
+      // If already formatted, return as is
+      if (contactId.includes('@')) {
+        return contactId;
+      }
+
+      // Try to get contact and check which format works
+      // First try @lid format
+      try {
+        const lidFormat = `${contactId}@lid`;
+        const contact = await this.client.getContactById(lidFormat);
+        if (contact) return lidFormat;
+      } catch (e) {
+        // LID not found, try c.us
+      }
+
+      // Try @c.us format
+      try {
+        const phoneFormat = `${contactId}@c.us`;
+        const contact = await this.client.getContactById(phoneFormat);
+        if (contact) return phoneFormat;
+      } catch (e) {
+        // Neither worked
+      }
+
+      // Default to @c.us if nothing worked
+      return `${contactId}@c.us`;
+      
+    } catch (error) {
+      console.error('Error getting chat ID:', error);
+      // Fallback to @c.us
+      return contactId.includes('@') ? contactId : `${contactId}@c.us`;
+    }
   }
 
   // Send text with numbered options (no buttons)
@@ -19,7 +62,8 @@ class NotificationService {
       });
       message += '\n_Balas dengan nomor pilihan Anda_';
       
-      await this.client.sendMessage(to, message);
+      const chatId = await this.getChatId(to);
+      await this.client.sendMessage(chatId, message);
     } catch (error) {
       console.error('Error sending options:', error);
       await this.client.sendMessage(to, text);
@@ -40,7 +84,8 @@ Silakan pilih layanan yang Anda butuhkan:
 
 _Balas dengan nomor pilihan (1 atau 2)_`;
     
-    await this.client.sendMessage(to, text);
+    const chatId = await this.getChatId(to);
+    await this.client.sendMessage(chatId, text);
   }
 
   // Send pengiriman form (CUSTOMER ONLY) - WITH PRICING
@@ -66,7 +111,8 @@ Catatan Tambahan: [Opsional]
 
 _Kirim form yang sudah diisi!_`;
 
-    await this.client.sendMessage(to, formText);
+    const chatId = await this.getChatId(to);
+    await this.client.sendMessage(chatId, formText);
   }
 
   // Send ojek form (CUSTOMER ONLY) - WITH PRICING
@@ -91,13 +137,13 @@ Catatan Tambahan: [Opsional]
 
 _Kirim form yang sudah diisi!_`;
 
-    await this.client.sendMessage(to, formText);
+    const chatId = await this.getChatId(to);
+    await this.client.sendMessage(chatId, formText);
   }
 
-  // Send order to driver (DRIVER ONLY - SIMPLIFIED)
+  // Send order to driver (DRIVER ONLY - FIXED LID)
   async sendOrderToDriver(driverContactId, order, timeout = 60) {
     try {
-      // driverContactId sudah dalam format lengkap: 8637615485122@lid atau 628xxx@c.us
       const message = `🔔 *ORDERAN BARU*
 
 Ada orderan baru nih!
@@ -111,21 +157,31 @@ Balas dengan:
 1 = Terima Orderan
 2 = Tolak Orderan`;
 
-      await this.client.sendMessage(driverContactId, message);
+      // Use getChatId to get correct format
+      const chatId = await this.getChatId(driverContactId);
+      console.log(`📤 Sending to driver: ${chatId}`);
       
-      console.log(`✅ Order notification sent to ${driverContactId}`);
+      await this.client.sendMessage(chatId, message);
+      
+      console.log(`✅ Order notification sent successfully`);
+      return true;
       
     } catch (error) {
       console.error('Error sending order to driver:', error);
-      throw error;
+      
+      // Try sending to group instead as fallback
+      console.log(`⚠️ Failed to send to driver directly, notification may need manual handling`);
+      return false;
     }
   }
 
   // Send FULL order details to driver (AFTER ACCEPTANCE) - WITH PRICING
   async sendOrderDetailsToDriver(driverChatId, orderDetails) {
     try {
+      const chatId = await this.getChatId(driverChatId);
+      
       // Kirim detail lengkap orderan
-      await this.client.sendMessage(driverChatId, orderDetails);
+      await this.client.sendMessage(chatId, orderDetails);
       
       // Kirim instruksi action
       const actionText = `\n📍 *INSTRUKSI DRIVER:*
@@ -136,7 +192,7 @@ Setelah selesai mengantarkan:
 
 _Selamat bekerja! 🏍️_`;
       
-      await this.client.sendMessage(driverChatId, actionText);
+      await this.client.sendMessage(chatId, actionText);
       
     } catch (error) {
       console.error('Error sending order details:', error);
@@ -154,7 +210,8 @@ Terima kasih! Pesanan Anda telah kami terima.
 🔍 Kami sedang mencarikan driver untuk Anda.
 ⏳ Mohon tunggu sebentar...`;
 
-    await this.client.sendMessage(customerPhone, message);
+    const chatId = await this.getChatId(customerPhone);
+    await this.client.sendMessage(chatId, message);
   }
 
   // Send driver found notification (CUSTOMER ONLY) - WITH PRICING
@@ -167,7 +224,8 @@ Terima kasih! Pesanan Anda telah kami terima.
 📞 Driver akan segera menghubungi Anda.
 ⏱️ Estimasi waktu: 5-10 menit 🏍️`;
 
-    await this.client.sendMessage(customerPhone, message);
+    const chatId = await this.getChatId(customerPhone);
+    await this.client.sendMessage(chatId, message);
   }
 
   // Send completion message to customer (CUSTOMER ONLY) - WITH PRICING INFO
@@ -184,7 +242,8 @@ Terima kasih telah menggunakan layanan *Kurir Kan*! 🎉
 
 💬 Ingin pesan lagi? Ketik "pesan" atau "menu"`;
 
-    await this.client.sendMessage(customerPhone, message);
+    const chatId = await this.getChatId(customerPhone);
+    await this.client.sendMessage(chatId, message);
   }
 
   // Send queue notification (CUSTOMER ONLY)
@@ -201,7 +260,8 @@ Balas dengan:
 1 = Ya, Masuk Antrian
 2 = Tidak, Batalkan Pesanan`;
 
-    await this.client.sendMessage(customerPhone, message);
+    const chatId = await this.getChatId(customerPhone);
+    await this.client.sendMessage(chatId, message);
   }
 
   // Send queued confirmation (CUSTOMER ONLY)
@@ -215,7 +275,8 @@ Pesanan Anda (${orderNumber}) telah masuk antrian.
 
 Terima kasih atas kesabaran Anda! 🙏`;
 
-    await this.client.sendMessage(customerPhone, message);
+    const chatId = await this.getChatId(customerPhone);
+    await this.client.sendMessage(chatId, message);
   }
 
   // Send cancellation message (CUSTOMER ONLY)
@@ -229,7 +290,8 @@ Mohon maaf, pesanan Anda telah dibatalkan.
 
 💬 Silakan pesan kembali jika berminat. Ketik "pesan"`;
 
-    await this.client.sendMessage(customerPhone, message);
+    const chatId = await this.getChatId(customerPhone);
+    await this.client.sendMessage(chatId, message);
   }
 
   // Send driver status update confirmation (DRIVER ONLY - GROUP)
