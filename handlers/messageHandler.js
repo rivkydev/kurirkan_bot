@@ -36,17 +36,21 @@ class MessageHandler {
     const sender = message.author || message.from;
 
     try {
-      // Extract LID from sender
-      const senderLID = sender.replace('@c.us', '').replace('@s.whatsapp.net', '').replace('@lid', '');
+      // Extract phone/LID dari sender
+      const senderPhone = sender.replace('@c.us', '').replace('@s.whatsapp.net', '').replace('@lid', '');
       
-      // Check if driver exists by LID
-      const driver = storage.getDriverByLID(senderLID);
+      // Cek driver berdasarkan phone atau LID
+      let driver = storage.getDriverByPhone(senderPhone);
       if (!driver) {
-        console.log(`❌ Sender ${senderLID} is not a registered driver`);
+        driver = storage.getDriverByLID(senderPhone);
+      }
+      
+      if (!driver) {
+        console.log(`❌ Sender ${senderPhone} is not a registered driver`);
         return;
       }
 
-      console.log(`✅ Driver found: ${driver.name} (LID: ${senderLID})`);
+      console.log(`✅ Driver found: ${driver.name} (ID: ${driver.driverId})`);
 
       // Status updates
       if (text === 'on duty') {
@@ -112,8 +116,8 @@ class MessageHandler {
     const chatId = message.from;
     const text = message.body.trim();
     
-    // Extract LID (format: 8637615485122@lid)
-    const senderLID = chatId.replace('@c.us', '').replace('@lid', '');
+    // Extract phone/LID
+    const senderPhone = chatId.replace('@c.us', '').replace('@lid', '');
     
     // Check if admin command
     if (text.startsWith('/')) {
@@ -124,18 +128,17 @@ class MessageHandler {
       // Check for driver registration command
       if (command.toLowerCase() === '/daftar' && args.length > 0) {
         const token = args[0];
-        const result = await adminService.registerDriverStep2(token, senderLID);
+        const result = await adminService.registerDriverStep2(token, senderPhone);
         await this.client.sendMessage(chatId, result.message);
         
         if (result.success) {
-          // Save data after successful registration
           storage.saveToFile();
         }
         return;
       }
       
       // Check for admin command
-      const adminResponse = await adminService.handleAdminCommand(command, senderLID, args);
+      const adminResponse = await adminService.handleAdminCommand(command, senderPhone, args);
       if (adminResponse) {
         await this.client.sendMessage(chatId, adminResponse);
         return;
@@ -145,8 +148,11 @@ class MessageHandler {
     const userState = this.userStates.get(chatId) || { step: 'idle' };
 
     try {
-      // Check if this is a driver (by LID)
-      const driver = storage.getDriverByLID(senderLID);
+      // Check if this is a driver
+      let driver = storage.getDriverByPhone(senderPhone);
+      if (!driver) {
+        driver = storage.getDriverByLID(senderPhone);
+      }
       
       if (driver) {
         await this.handleDriverMessage(message, driver);
@@ -288,30 +294,36 @@ class MessageHandler {
   }
 
   async sendOrderToDriverWithTimeout(driver, order, timeout = 60000) {
-    // Get driver's contact ID (LID or phone)
-    const driverContactId = driver.lid ? `${driver.lid}@lid` : `${driver.phone}@c.us`;
-    
-    console.log(`📤 Sending order ${order.orderNumber} to driver ${driver.name} (Contact: ${driverContactId})`);
-    
-    // Send notification using contact ID
-    await this.notification.sendOrderToDriver(driverContactId, order, timeout / 1000);
-
-    const timeoutId = setTimeout(async () => {
-      console.log(`⏰ Driver ${driver.name} tidak merespon orderan ${order.orderNumber}`);
+    try {
+      // PERBAIKAN: Gunakan phone dengan @c.us, JANGAN gunakan LID
+      const driverChatId = `${driver.phone}@c.us`;
       
-      const currentOrder = await orderService.getOrderByNumber(order.orderNumber);
-      if (currentOrder.status === 'AWAITING_DRIVER') {
-        await this.tryNextDriver(order);
-      }
+      console.log(`📤 Sending order ${order.orderNumber} to driver ${driver.name} (Phone: ${driverChatId})`);
       
-      this.driverTimeouts.delete(order.orderNumber);
-    }, timeout);
+      // Send notification
+      await this.notification.sendOrderToDriver(driverChatId, order, timeout / 1000);
 
-    this.driverTimeouts.set(order.orderNumber, {
-      timeoutId,
-      driverId: driver.driverId,
-      orderNumber: order.orderNumber
-    });
+      const timeoutId = setTimeout(async () => {
+        console.log(`⏰ Driver ${driver.name} tidak merespon orderan ${order.orderNumber}`);
+        
+        const currentOrder = await orderService.getOrderByNumber(order.orderNumber);
+        if (currentOrder.status === 'AWAITING_DRIVER') {
+          await this.tryNextDriver(order);
+        }
+        
+        this.driverTimeouts.delete(order.orderNumber);
+      }, timeout);
+
+      this.driverTimeouts.set(order.orderNumber, {
+        timeoutId,
+        driverId: driver.driverId,
+        orderNumber: order.orderNumber
+      });
+    } catch (error) {
+      console.error(`Error sending order to driver:`, error);
+      // Jika error, coba driver berikutnya
+      await this.tryNextDriver(order);
+    }
   }
 
   async tryNextDriver(order) {

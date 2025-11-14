@@ -1,7 +1,3 @@
-// ============================================
-// FILE: services/notificationService.js (FIXED LID ISSUE)
-// ============================================
-
 const config = require('../config/config');
 const Formatter = require('../utils/formatter');
 
@@ -10,50 +6,6 @@ class NotificationService {
     this.client = client;
   }
 
-  // Helper: Get correct chat ID format
-  async getChatId(contactId) {
-    try {
-      // contactId can be:
-      // - 8637615485122@lid
-      // - 628123456789@c.us
-      // - 8637615485122 (raw LID)
-      // - 628123456789 (raw phone)
-
-      // If already formatted, return as is
-      if (contactId.includes('@')) {
-        return contactId;
-      }
-
-      // Try to get contact and check which format works
-      // First try @lid format
-      try {
-        const lidFormat = `${contactId}@lid`;
-        const contact = await this.client.getContactById(lidFormat);
-        if (contact) return lidFormat;
-      } catch (e) {
-        // LID not found, try c.us
-      }
-
-      // Try @c.us format
-      try {
-        const phoneFormat = `${contactId}@c.us`;
-        const contact = await this.client.getContactById(phoneFormat);
-        if (contact) return phoneFormat;
-      } catch (e) {
-        // Neither worked
-      }
-
-      // Default to @c.us if nothing worked
-      return `${contactId}@c.us`;
-      
-    } catch (error) {
-      console.error('Error getting chat ID:', error);
-      // Fallback to @c.us
-      return contactId.includes('@') ? contactId : `${contactId}@c.us`;
-    }
-  }
-
-  // Send text with numbered options (no buttons)
   async sendOptions(to, text, options) {
     try {
       let message = text + '\n\n';
@@ -62,15 +14,13 @@ class NotificationService {
       });
       message += '\n_Balas dengan nomor pilihan Anda_';
       
-      const chatId = await this.getChatId(to);
-      await this.client.sendMessage(chatId, message);
+      await this.client.sendMessage(to, message);
     } catch (error) {
       console.error('Error sending options:', error);
       await this.client.sendMessage(to, text);
     }
   }
 
-  // Send welcome message (CUSTOMER ONLY) - WITH PRICING
   async sendWelcome(to) {
     const pengirimanTarif = Formatter.formatCurrency(config.pricing.pengiriman);
     const ojekTarif = Formatter.formatCurrency(config.pricing.ojek);
@@ -84,11 +34,9 @@ Silakan pilih layanan yang Anda butuhkan:
 
 _Balas dengan nomor pilihan (1 atau 2)_`;
     
-    const chatId = await this.getChatId(to);
-    await this.client.sendMessage(chatId, text);
+    await this.client.sendMessage(to, text);
   }
 
-  // Send pengiriman form (CUSTOMER ONLY) - WITH PRICING
   async sendPengirimanForm(to) {
     const tarif = Formatter.formatCurrency(config.pricing.pengiriman);
     
@@ -111,11 +59,9 @@ Catatan Tambahan: [Opsional]
 
 _Kirim form yang sudah diisi!_`;
 
-    const chatId = await this.getChatId(to);
-    await this.client.sendMessage(chatId, formText);
+    await this.client.sendMessage(to, formText);
   }
 
-  // Send ojek form (CUSTOMER ONLY) - WITH PRICING
   async sendOjekForm(to) {
     const tarif = Formatter.formatCurrency(config.pricing.ojek);
     
@@ -137,13 +83,15 @@ Catatan Tambahan: [Opsional]
 
 _Kirim form yang sudah diisi!_`;
 
-    const chatId = await this.getChatId(to);
-    await this.client.sendMessage(chatId, formText);
+    await this.client.sendMessage(to, formText);
   }
 
-  // Send order to driver (DRIVER ONLY - FIXED LID)
-  async sendOrderToDriver(driverContactId, order, timeout = 60) {
+  // PERBAIKAN: Hanya terima chatId dengan format @c.us
+  async sendOrderToDriver(driverChatId, order, timeout = 60) {
     try {
+      // Pastikan format yang diterima adalah phone@c.us
+      console.log(`📤 Sending order ${order.orderNumber} to ${driverChatId}`);
+      
       const message = `🔔 *ORDERAN BARU*
 
 Ada orderan baru nih!
@@ -157,33 +105,19 @@ Balas dengan:
 1 = Terima Orderan
 2 = Tolak Orderan`;
 
-      // Use getChatId to get correct format
-      const chatId = await this.getChatId(driverContactId);
-      console.log(`📤 Sending to driver: ${chatId}`);
-      
-      await this.client.sendMessage(chatId, message);
-      
-      console.log(`✅ Order notification sent successfully`);
-      return true;
+      await this.client.sendMessage(driverChatId, message);
+      console.log(`✅ Order notification sent successfully to ${driverChatId}`);
       
     } catch (error) {
       console.error('Error sending order to driver:', error);
-      
-      // Try sending to group instead as fallback
-      console.log(`⚠️ Failed to send to driver directly, notification may need manual handling`);
-      return false;
+      throw error;
     }
   }
 
-  // Send FULL order details to driver (AFTER ACCEPTANCE) - WITH PRICING
   async sendOrderDetailsToDriver(driverChatId, orderDetails) {
     try {
-      const chatId = await this.getChatId(driverChatId);
+      await this.client.sendMessage(driverChatId, orderDetails);
       
-      // Kirim detail lengkap orderan
-      await this.client.sendMessage(chatId, orderDetails);
-      
-      // Kirim instruksi action
       const actionText = `\n📍 *INSTRUKSI DRIVER:*
 
 Setelah selesai mengantarkan:
@@ -192,14 +126,13 @@ Setelah selesai mengantarkan:
 
 _Selamat bekerja! 🏍️_`;
       
-      await this.client.sendMessage(chatId, actionText);
+      await this.client.sendMessage(driverChatId, actionText);
       
     } catch (error) {
       console.error('Error sending order details:', error);
     }
   }
 
-  // Send order confirmation to customer (CUSTOMER ONLY) - WITH PRICING
   async sendOrderConfirmation(customerPhone, orderNumber) {
     const message = `✅ *PESANAN DITERIMA*
 
@@ -210,11 +143,9 @@ Terima kasih! Pesanan Anda telah kami terima.
 🔍 Kami sedang mencarikan driver untuk Anda.
 ⏳ Mohon tunggu sebentar...`;
 
-    const chatId = await this.getChatId(customerPhone);
-    await this.client.sendMessage(chatId, message);
+    await this.client.sendMessage(customerPhone, message);
   }
 
-  // Send driver found notification (CUSTOMER ONLY) - WITH PRICING
   async sendDriverFound(customerPhone, driverName, orderNumber) {
     const message = `✅ *DRIVER DITEMUKAN!*
 
@@ -224,11 +155,9 @@ Terima kasih! Pesanan Anda telah kami terima.
 📞 Driver akan segera menghubungi Anda.
 ⏱️ Estimasi waktu: 5-10 menit 🏍️`;
 
-    const chatId = await this.getChatId(customerPhone);
-    await this.client.sendMessage(chatId, message);
+    await this.client.sendMessage(customerPhone, message);
   }
 
-  // Send completion message to customer (CUSTOMER ONLY) - WITH PRICING INFO
   async sendCompletionMessage(customerPhone, orderNumber, driverName) {
     const message = `✅ *PESANAN SELESAI*
 
@@ -242,11 +171,9 @@ Terima kasih telah menggunakan layanan *Kurir Kan*! 🎉
 
 💬 Ingin pesan lagi? Ketik "pesan" atau "menu"`;
 
-    const chatId = await this.getChatId(customerPhone);
-    await this.client.sendMessage(chatId, message);
+    await this.client.sendMessage(customerPhone, message);
   }
 
-  // Send queue notification (CUSTOMER ONLY)
   async sendQueueNotification(customerPhone, orderNumber) {
     const message = `⚠️ *DRIVER SEDANG TIDAK TERSEDIA*
 
@@ -260,11 +187,9 @@ Balas dengan:
 1 = Ya, Masuk Antrian
 2 = Tidak, Batalkan Pesanan`;
 
-    const chatId = await this.getChatId(customerPhone);
-    await this.client.sendMessage(chatId, message);
+    await this.client.sendMessage(customerPhone, message);
   }
 
-  // Send queued confirmation (CUSTOMER ONLY)
   async sendQueuedConfirmation(customerPhone, orderNumber) {
     const message = `📝 *PESANAN MASUK ANTRIAN*
 
@@ -275,11 +200,9 @@ Pesanan Anda (${orderNumber}) telah masuk antrian.
 
 Terima kasih atas kesabaran Anda! 🙏`;
 
-    const chatId = await this.getChatId(customerPhone);
-    await this.client.sendMessage(chatId, message);
+    await this.client.sendMessage(customerPhone, message);
   }
 
-  // Send cancellation message (CUSTOMER ONLY)
   async sendCancellationMessage(customerPhone, orderNumber, reason) {
     const message = `❌ *PESANAN DIBATALKAN*
 
@@ -290,11 +213,9 @@ Mohon maaf, pesanan Anda telah dibatalkan.
 
 💬 Silakan pesan kembali jika berminat. Ketik "pesan"`;
 
-    const chatId = await this.getChatId(customerPhone);
-    await this.client.sendMessage(chatId, message);
+    await this.client.sendMessage(customerPhone, message);
   }
 
-  // Send driver status update confirmation (DRIVER ONLY - GROUP)
   async sendDriverStatusUpdate(groupId, driverName, status) {
     const statusEmoji = status === 'On Duty' ? '🟢' : '⚪';
     const statusText = status === 'On Duty' ? 'SIAP MENERIMA ORDERAN' : 'ISTIRAHAT';
