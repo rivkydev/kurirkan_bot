@@ -1,6 +1,9 @@
 // ============================================
-// FILE: services/notificationService.js (FIXED)
+// FILE: services/notificationService.js (COMPLETE WITH IMPORTS)
 // ============================================
+
+const config = require('../config/config');
+const Formatter = require('../utils/formatter');
 
 class NotificationService {
   constructor(client) {
@@ -92,20 +95,12 @@ _Kirim form yang sudah diisi!_`;
   }
 
   // Send order to driver (DRIVER ONLY - SIMPLIFIED)
-  async sendOrderToDriver(driverPhone, order, timeout = 60) {
+  async sendOrderToDriver(driverContactId, order, timeout = 60) {
     try {
-      const storage = require('../storage/inMemoryStorage');
-      const driver = storage.getDriverByPhone(driverPhone.replace('@c.us', '').replace('@lid', ''));
-      
-      if (!driver) {
-        console.error('❌ Driver not found:', driverPhone);
-        return;
-      }
-
-      // PESAN UNTUK DRIVER - HANYA INFO ORDERAN BARU
+      // driverContactId sudah dalam format lengkap: 8637615485122@lid atau 628xxx@c.us
       const message = `🔔 *ORDERAN BARU*
 
-Hai ${driver.name}! Ada orderan baru nih.
+Ada orderan baru nih!
 
 📋 No. Pesanan: *${order.orderNumber}*
 📦 Jenis: ${order.orderType}
@@ -116,14 +111,13 @@ Balas dengan:
 1 = Terima Orderan
 2 = Tolak Orderan`;
 
-      // Kirim ke driver dengan format LID yang benar
-      const driverChatId = driver.phone.includes('@') ? driver.phone : driver.phone + '@lid';
-      await this.client.sendMessage(driverChatId, message);
+      await this.client.sendMessage(driverContactId, message);
       
-      console.log(`✅ Order notification sent to driver ${driver.name} (${driverChatId})`);
+      console.log(`✅ Order notification sent to ${driverContactId}`);
       
     } catch (error) {
       console.error('Error sending order to driver:', error);
+      throw error;
     }
   }
 

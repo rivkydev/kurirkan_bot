@@ -8,6 +8,8 @@
     "dev": "nodemon app.js",
     "register-driver": "node scripts/registerDriver.js",
     "list-drivers": "node scripts/listDrivers.js",
+    "update-lid": "node scripts/updateDriverLID.js",
+    "detect-lid": "node scripts/detectLID.js",
     "stats": "node scripts/showStats.js"
   },
   "keywords": [

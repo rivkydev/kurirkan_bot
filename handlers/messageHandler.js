@@ -288,10 +288,13 @@ class MessageHandler {
   }
 
   async sendOrderToDriverWithTimeout(driver, order, timeout = 60000) {
-    console.log(`📤 Sending order ${order.orderNumber} to driver ${driver.name} (LID: ${driver.lid})`);
+    // Get driver's contact ID (LID or phone)
+    const driverContactId = driver.lid ? `${driver.lid}@lid` : `${driver.phone}@c.us`;
     
-    // Send notification using LID
-    await this.notification.sendOrderToDriver(driver.lid, order, timeout / 1000);
+    console.log(`📤 Sending order ${order.orderNumber} to driver ${driver.name} (Contact: ${driverContactId})`);
+    
+    // Send notification using contact ID
+    await this.notification.sendOrderToDriver(driverContactId, order, timeout / 1000);
 
     const timeoutId = setTimeout(async () => {
       console.log(`⏰ Driver ${driver.name} tidak merespon orderan ${order.orderNumber}`);

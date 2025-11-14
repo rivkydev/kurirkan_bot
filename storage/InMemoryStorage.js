@@ -1,5 +1,5 @@
 // ============================================
-// FILE: storage/inMemoryStorage.js (WITH ADMIN FEATURES)
+// FILE: storage/inMemoryStorage.js (FIXED - Added getDriverByLID)
 // ============================================
 
 class InMemoryStorage {
@@ -182,6 +182,13 @@ class InMemoryStorage {
   getDriverByPhone(phone) {
     const normalizedPhone = phone.replace('@c.us', '').replace('@lid', '').replace(/[\s-]/g, '');
     const driverId = this.driversByPhone.get(normalizedPhone);
+    return driverId ? this.drivers.get(driverId) : null;
+  }
+
+  // NEW METHOD: Get driver by LID
+  getDriverByLID(lid) {
+    const normalizedLID = lid.replace('@lid', '').replace('@c.us', '').replace('@s.whatsapp.net', '').replace(/[\s-]/g, '');
+    const driverId = this.driversByLID.get(normalizedLID);
     return driverId ? this.drivers.get(driverId) : null;
   }
 
@@ -484,8 +491,13 @@ class InMemoryStorage {
     if (data.drivers) {
       this.drivers = new Map(data.drivers);
       this.driversByPhone.clear();
+      this.driversByLID.clear();
+      
       for (const [driverId, driver] of this.drivers) {
         this.driversByPhone.set(driver.phone, driverId);
+        if (driver.lid) {
+          this.driversByLID.set(driver.lid, driverId);
+        }
       }
     }
 
