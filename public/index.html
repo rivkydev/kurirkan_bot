@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SmartBot - Dashboard</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
+</head>
+<body>
+    <div class="dashboard-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="logo">
+                <h2>🚀 SmartBot</h2>
+                <p>System Dashboard</p>
+            </div>
+            <nav>
+                <button class="nav-btn active" data-target="dashboard">📊 Dashboard</button>
+                <button class="nav-btn" data-target="drivers">👨‍✈️ Drivers</button>
+                <button class="nav-btn" data-target="orders">📦 Orders</button>
+            </nav>
+            <div class="status-indicator">
+                <span class="dot disconnected" id="connection-dot"></span>
+                <span id="connection-status">Connecting...</span>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            
+            <!-- SECTION: DASHBOARD -->
+            <section id="dashboard" class="content-section active">
+                <header>
+                    <h1>Dashboard Overview</h1>
+                    <p>Real-time bot statistics</p>
+                </header>
+
+                <div class="stats-grid">
+                    <div class="stat-card" id="wa-status-card" style="border-left: 4px solid var(--warning);">
+                        <h3>WHATSAPP STATUS</h3>
+                        <p class="stat-value" id="stat-wa-status" style="font-size: 1.5rem; color: var(--warning);">Checking...</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>TOTAL ORDERS</h3>
+                        <p class="stat-value" id="stat-total-orders">0</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>COMPLETED</h3>
+                        <p class="stat-value" id="stat-completed">0</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>ACTIVE DRIVERS</h3>
+                        <p class="stat-value" id="stat-active-drivers">0</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>QUEUE</h3>
+                        <p class="stat-value" id="stat-queue">0</p>
+                    </div>
+                </div>
+
+                <div class="qr-container" id="qr-container">
+                    <h3>WhatsApp Authentication</h3>
+                    <p>Scan this QR code with your WhatsApp to link the bot.</p>
+                    <div id="qrcode"></div>
+                </div>
+            </section>
+
+            <!-- SECTION: DRIVERS -->
+            <section id="drivers" class="content-section">
+                <header class="section-header">
+                    <div>
+                        <h1>Drivers Management</h1>
+                        <p>Manage your delivery fleet</p>
+                    </div>
+                    <button class="primary-btn" id="btn-add-driver">+ Add Driver</button>
+                </header>
+                
+                <div class="table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Name</th>
+                                <th>Phone Number</th>
+                                <th>Status</th>
+                                <th>Today's Orders</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="drivers-tbody">
+                            <!-- Populated by JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- SECTION: ORDERS -->
+            <section id="orders" class="content-section">
+                <header>
+                    <h1>Order History</h1>
+                    <p>Track all deliveries and rides</p>
+                </header>
+
+                <div class="table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Order #</th>
+                                <th>Type</th>
+                                <th>Customer</th>
+                                <th>Driver</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="orders-tbody">
+                            <!-- Populated by JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- MODAL: ADD DRIVER -->
+    <div class="modal-overlay" id="add-driver-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Add New Driver</h2>
+                <button class="close-btn" id="close-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Driver Name</label>
+                    <input type="text" id="driver-name" placeholder="e.g. John Doe">
+                </div>
+                <div class="form-group">
+                    <label>WhatsApp Number</label>
+                    <input type="text" id="driver-phone" placeholder="e.g. 081234567890">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="secondary-btn" id="cancel-driver">Cancel</button>
+                <button class="primary-btn" id="submit-driver">Save Driver</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: ORDER DETAILS -->
+    <div class="modal-overlay" id="order-details-modal">
+        <div class="modal-content" style="width: 600px; max-height: 90vh; overflow-y: auto;">
+            <div class="modal-header">
+                <h2>📦 Order Details</h2>
+                <button class="close-btn" id="close-order-modal">&times;</button>
+            </div>
+            <div class="modal-body" id="order-details-body">
+                <!-- Injected via JS -->
+            </div>
+            <div class="modal-footer">
+                <button class="secondary-btn" id="btn-close-order">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- TOAST NOTIFICATIONS -->
+    <div id="toast-container"></div>
+
+    <script src="script.js"></script>
+</body>
+</html>

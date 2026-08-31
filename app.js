@@ -7,6 +7,7 @@ require('dotenv').config();
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const storage = require('./storage/inMemoryStorage');
+const webServer = require('./services/webServer');
 
 // Services
 const NotificationService = require('./services/notificationService');
@@ -20,7 +21,7 @@ class KurirBot {
   }
 
   async initialize() {
-    console.log('🚀 Initializing Kurir Kan Bot (In-Memory Mode)...');
+    console.log('🚀 Initializing SmartBot System (In-Memory Mode)...');
 
     // Load saved data if exists
     try {
@@ -32,6 +33,9 @@ class KurirBot {
     // Initialize WhatsApp client
     this.initializeClient();
     this.setupEventHandlers();
+
+    // Start Web Server
+    webServer.start();
 
     // Setup auto-save every 5 minutes
     this.setupAutoSave();
@@ -47,6 +51,7 @@ class KurirBot {
       }),
       puppeteer: {
         headless: true,
+        executablePath: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
         args: ['--no-sandbox', '--disable-setuid-sandbox']
       }
     });
@@ -58,18 +63,22 @@ class KurirBot {
     this.client.on('qr', (qr) => {
       console.log('📱 Scan QR Code:');
       qrcode.generate(qr, { small: true });
+      webServer.emitQR(qr);
     });
 
     this.client.on('ready', async () => {
       console.log('✅ Bot is ready!');
       console.log('📞 Connected as:', this.client.info.pushname);
+      
+      storage.isBotConnected = true;
+      webServer.emitReady({ pushname: this.client.info.pushname });
 
       this.notificationService = new NotificationService(this.client);
       this.messageHandler = new MessageHandler(this.client, this.notificationService);
 
       this.startQueueProcessor();
 
-      console.log('🎉 Kurir Kan Bot is now running!');
+      console.log('🎉 SmartBot System is now running!');
       this.showStats();
     });
 
@@ -83,6 +92,7 @@ class KurirBot {
 
     this.client.on('disconnected', (reason) => {
       console.log('❌ Client disconnected:', reason);
+      storage.isBotConnected = false;
       // Save data before exit
       storage.saveToFile();
     });

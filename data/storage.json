@@ -4,108 +4,24 @@
       "DRV001",
       {
         "driverId": "DRV001",
-        "name": "Muhammad Rivky",
-        "phone": "8637615485122",
-        "status": "On Duty",
+        "name": "asdasd",
+        "phone": "085823358559",
+        "status": "Off Duty",
         "currentOrder": null,
-        "totalOrders": 1,
-        "todayOrders": 1,
-        "lastStatusUpdate": "2025-11-13T18:21:23.735Z",
-        "createdAt": "2025-11-12T17:12:12.848Z"
+        "totalOrders": 0,
+        "todayOrders": 0,
+        "isActive": true,
+        "isSuspended": false,
+        "suspensionReason": null,
+        "lastStatusUpdate": "2026-08-31T14:52:34.589Z",
+        "createdAt": "2026-08-31T14:52:34.589Z"
       }
     ]
   ],
-  "orders": [
-    [
-      "KRK-20251114-004",
-      {
-        "orderNumber": "KRK-20251114-004",
-        "orderType": "Pengiriman",
-        "status": "AWAITING_DRIVER",
-        "customer": {
-          "phone": "59846107914263",
-          "name": "martin",
-          "chatId": "59846107914263@lid"
-        },
-        "assignedDriver": null,
-        "assignedAt": null,
-        "completedAt": null,
-        "cancelledAt": null,
-        "cancellationReason": null,
-        "timeline": [
-          {
-            "status": "NEW",
-            "timestamp": "2025-11-14T07:38:42.650Z",
-            "note": "Order created"
-          },
-          {
-            "status": "AWAITING_DRIVER",
-            "timestamp": "2025-11-14T07:38:42.734Z",
-            "note": ""
-          }
-        ],
-        "createdAt": "2025-11-14T07:38:42.650Z",
-        "pengiriman": {
-          "namaPengirim": "martin",
-          "nomorHpPengirim": "085823358559",
-          "lokasiPengambilan": "jalan daeng pawero no 6",
-          "deskripsiPesanan": "ayam geprek",
-          "namaPenerima": "tinus",
-          "nomorHpPenerima": "085213442540",
-          "lokasiPengantaran": "jalan kejayaan raya no 10",
-          "waktuDiinginkan": "15:00",
-          "metodePembayaran": "COD",
-          "catatanTambahan": "jangan lama gre"
-        }
-      }
-    ],
-    [
-      "KRK-20251114-005",
-      {
-        "orderNumber": "KRK-20251114-005",
-        "orderType": "Pengiriman",
-        "status": "AWAITING_DRIVER",
-        "customer": {
-          "phone": "59846107914263",
-          "name": "martin",
-          "chatId": "59846107914263@lid"
-        },
-        "assignedDriver": null,
-        "assignedAt": null,
-        "completedAt": null,
-        "cancelledAt": null,
-        "cancellationReason": null,
-        "timeline": [
-          {
-            "status": "NEW",
-            "timestamp": "2025-11-14T07:43:39.346Z",
-            "note": "Order created"
-          },
-          {
-            "status": "AWAITING_DRIVER",
-            "timestamp": "2025-11-14T07:43:39.435Z",
-            "note": ""
-          }
-        ],
-        "createdAt": "2025-11-14T07:43:39.346Z",
-        "pengiriman": {
-          "namaPengirim": "martin",
-          "nomorHpPengirim": "085823358559",
-          "lokasiPengambilan": "jalan daeng pawero no 6",
-          "deskripsiPesanan": "ayam geprek",
-          "namaPenerima": "tinus",
-          "nomorHpPenerima": "085213442540",
-          "lokasiPengantaran": "jalan kejayaan raya no 10",
-          "waktuDiinginkan": "15:00",
-          "metodePembayaran": "COD",
-          "catatanTambahan": "jangan lama gre"
-        }
-      }
-    ]
-  ],
+  "orders": [],
   "queue": [],
   "deposits": [],
   "registrationTokens": [],
-  "orderCounter": 5,
-  "exportedAt": "2025-11-14T07:54:45.708Z"
+  "orderCounter": 0,
+  "exportedAt": "2026-08-31T14:57:17.383Z"
 }

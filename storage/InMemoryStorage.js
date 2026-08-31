@@ -25,6 +25,9 @@ class InMemoryStorage {
     // Admin settings
     this.adminLID = '8637615485122'; // DRV001 LID (detected from chat)
     this.dailyDepositRequired = 5000; // Rp 5.000
+
+    // System State
+    this.isBotConnected = false;
   }
 
   // ========== ADMIN METHODS ==========
@@ -412,6 +415,10 @@ class InMemoryStorage {
 
   getQueueSize() {
     return this.queue.length;
+  }
+
+  getQueue() {
+    return this.queue;
   }
 
   // ========== ANALYTICS METHODS ==========

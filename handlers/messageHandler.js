@@ -189,11 +189,11 @@ class MessageHandler {
       case 'waiting_service_choice':
         if (lowerText.includes('pengiriman') || lowerText.includes('barang') || text === '1') {
           await this.notification.sendPengirimanForm(chatId);
-          this.userStates.set(chatId, { step: 'waiting_pengiriman_form' });
+          this.userStates.set(chatId, { step: 'pengiriman_1_pickup', tempData: {} });
           
         } else if (lowerText.includes('ojek') || lowerText.includes('antar jemput') || text === '2') {
           await this.notification.sendOjekForm(chatId);
-          this.userStates.set(chatId, { step: 'waiting_ojek_form' });
+          this.userStates.set(chatId, { step: 'ojek_1_pickup', tempData: {} });
           
         } else {
           await this.client.sendMessage(
@@ -203,12 +203,54 @@ class MessageHandler {
         }
         break;
 
-      case 'waiting_pengiriman_form':
-        await this.processPengirimanForm(chatId, text);
+      case 'pengiriman_1_pickup':
+        userState.tempData.lokasiPengambilan = text;
+        await this.client.sendMessage(chatId, "🎯 *Langkah 2/4: Lokasi Tujuan*\nKetik alamat tujuan pengiriman barang:");
+        this.userStates.set(chatId, { step: 'pengiriman_2_delivery', tempData: userState.tempData });
         break;
 
-      case 'waiting_ojek_form':
-        await this.processOjekForm(chatId, text);
+      case 'pengiriman_2_delivery':
+        userState.tempData.lokasiPengantaran = text;
+        await this.client.sendMessage(chatId, "📋 *Langkah 3/4: Detail Barang & Penerima*\nKetik isi paket dan nama/HP penerimanya.\n_(Contoh: Sepatu - Budi 0812345)_");
+        this.userStates.set(chatId, { step: 'pengiriman_3_items', tempData: userState.tempData });
+        break;
+
+      case 'pengiriman_3_items':
+        userState.tempData.deskripsiPesanan = text;
+        const confPengiriman = `✅ *Langkah 4/4: Konfirmasi Order*\n\n📍 *Ambil:* ${userState.tempData.lokasiPengambilan}\n🎯 *Tujuan:* ${userState.tempData.lokasiPengantaran}\n📦 *Barang:* ${userState.tempData.deskripsiPesanan}\n💰 *Estimasi:* Rp ${config.pricing.pengiriman.toLocaleString('id-ID')}\n\nKetik *SETUJU* untuk mencari kurir, atau *BATAL* untuk membatalkan.`;
+        await this.client.sendMessage(chatId, confPengiriman);
+        this.userStates.set(chatId, { step: 'pengiriman_4_confirm', tempData: userState.tempData });
+        break;
+
+      case 'pengiriman_4_confirm':
+        if (lowerText === 'setuju' || lowerText === 'ya') {
+            await this.processFinalPengiriman(chatId, userState.tempData, message);
+        } else {
+            await this.client.sendMessage(chatId, "❌ Pesanan dibatalkan. Ketik *pesan* untuk memulai ulang.");
+            this.userStates.delete(chatId);
+        }
+        break;
+
+      case 'ojek_1_pickup':
+        userState.tempData.lokasiJemput = text;
+        await this.client.sendMessage(chatId, "🎯 *Langkah 2/3: Lokasi Tujuan*\nKetik alamat tujuan yang mau kamu tuju:");
+        this.userStates.set(chatId, { step: 'ojek_2_delivery', tempData: userState.tempData });
+        break;
+
+      case 'ojek_2_delivery':
+        userState.tempData.lokasiTujuan = text;
+        const confOjek = `✅ *Langkah 3/3: Konfirmasi Order*\n\n📍 *Jemput:* ${userState.tempData.lokasiJemput}\n🎯 *Tujuan:* ${userState.tempData.lokasiTujuan}\n💰 *Estimasi:* Rp ${config.pricing.ojek.toLocaleString('id-ID')}\n\nKetik *SETUJU* untuk memanggil driver, atau *BATAL*.`;
+        await this.client.sendMessage(chatId, confOjek);
+        this.userStates.set(chatId, { step: 'ojek_3_confirm', tempData: userState.tempData });
+        break;
+
+      case 'ojek_3_confirm':
+        if (lowerText === 'setuju' || lowerText === 'ya') {
+            await this.processFinalOjek(chatId, userState.tempData, message);
+        } else {
+            await this.client.sendMessage(chatId, "❌ Pesanan dibatalkan. Ketik *pesan* untuk memulai ulang.");
+            this.userStates.delete(chatId);
+        }
         break;
 
       case 'waiting_queue_decision':
@@ -221,23 +263,41 @@ class MessageHandler {
     }
   }
 
-  async processPengirimanForm(chatId, text) {
-    const formData = Validator.parsePengirimanForm(text);
-    const validation = Validator.validatePengirimanData(formData);
-    
-    if (!validation.valid) {
-      await this.client.sendMessage(
-        chatId,
-        `❌ *Form tidak valid*\n\n${validation.message}\n\nSilakan isi ulang form dengan lengkap.`
-      );
-      await this.notification.sendPengirimanForm(chatId);
-      return;
+  async getContactData(message) {
+    try {
+        const contact = await message.getContact();
+        return {
+            name: contact.pushname || contact.name || 'Customer',
+            phone: contact.number || message.from.replace('@c.us', '').replace('@lid', '')
+        };
+    } catch (err) {
+        return {
+            name: 'Customer',
+            phone: message.from.replace('@c.us', '').replace('@lid', '')
+        };
     }
+  }
 
+  async processFinalPengiriman(chatId, tempData, message) {
+    const contactData = await this.getContactData(message);
     const customerData = {
-      phone: chatId.replace('@c.us', '').replace('@lid', ''),
-      name: formData.namaPengirim,
+      phone: contactData.phone,
+      name: contactData.name,
       chatId: chatId
+    };
+
+    const formData = {
+        namaPengirim: contactData.name,
+        nomorHpPengirim: contactData.phone,
+        lokasiPengambilan: tempData.lokasiPengambilan,
+        deskripsiPesanan: tempData.deskripsiPesanan,
+        namaPenerima: 'Sesuai detail barang',
+        nomorHpPenerima: '-',
+        lokasiPengantaran: tempData.lokasiPengantaran,
+        waktuDiinginkan: 'ASAP',
+        metodePembayaran: 'COD',
+        price: config.pricing.pengiriman,
+        distance: 5 // Default distance mapping
     };
 
     const order = await orderService.createOrder('Pengiriman', customerData, formData);
@@ -246,23 +306,24 @@ class MessageHandler {
     this.userStates.set(chatId, { step: 'idle' });
   }
 
-  async processOjekForm(chatId, text) {
-    const formData = Validator.parseOjekForm(text);
-    const validation = Validator.validateOjekData(formData);
-    
-    if (!validation.valid) {
-      await this.client.sendMessage(
-        chatId,
-        `❌ *Form tidak valid*\n\n${validation.message}\n\nSilakan isi ulang form dengan lengkap.`
-      );
-      await this.notification.sendOjekForm(chatId);
-      return;
-    }
-
+  async processFinalOjek(chatId, tempData, message) {
+    const contactData = await this.getContactData(message);
     const customerData = {
-      phone: chatId.replace('@c.us', '').replace('@lid', ''),
-      name: formData.namaPenumpang,
+      phone: contactData.phone,
+      name: contactData.name,
       chatId: chatId
+    };
+
+    const formData = {
+        namaPenumpang: contactData.name,
+        nomorHp: contactData.phone,
+        lokasiJemput: tempData.lokasiJemput,
+        lokasiTujuan: tempData.lokasiTujuan,
+        jumlahPenumpang: 1,
+        waktuJemput: 'ASAP',
+        metodePembayaran: 'COD',
+        price: config.pricing.ojek,
+        distance: 5 // Default distance mapping
     };
 
     const order = await orderService.createOrder('Ojek', customerData, formData);
@@ -296,7 +357,9 @@ class MessageHandler {
   async sendOrderToDriverWithTimeout(driver, order, timeout = 60000) {
     try {
       // PERBAIKAN: Gunakan phone dengan @c.us, JANGAN gunakan LID
-      const driverChatId = `${driver.phone}@c.us`;
+      let phoneToSend = driver.phone;
+      if (phoneToSend.startsWith('8')) phoneToSend = '62' + phoneToSend;
+      const driverChatId = `${phoneToSend}@c.us`;
       
       console.log(`📤 Sending order ${order.orderNumber} to driver ${driver.name} (Phone: ${driverChatId})`);
       

@@ -38,52 +38,13 @@ _Balas dengan nomor pilihan (1 atau 2)_`;
   }
 
   async sendPengirimanForm(to) {
-    const tarif = Formatter.formatCurrency(config.pricing.pengiriman);
-    
-    const formText = `📋 *FORM PEMESANAN PENGIRIMAN*
-💰 Tarif: ${tarif}
-
-Silakan isi form berikut dengan format yang benar:
-
-Nama Pengirim: [Isi]
-Nomor HP Pengirim: [Isi]
-Lokasi Pengambilan: [Alamat lengkap]
-Nama Toko/Restoran: [Isi]
-Deskripsi Pesanan: [Detail pesanan]
-Nama Penerima: [Isi]
-Nomor HP Penerima: [Isi]
-Lokasi Pengantaran: [Alamat lengkap]
-Waktu Diinginkan: [ASAP/Jam]
-Metode Pembayaran: [COD/Transfer/E-wallet]
-Catatan Tambahan: [Opsional]
-
-_Kirim form yang sudah diisi!_`;
-
-    await this.client.sendMessage(to, formText);
+    const text = `📦 Siap! Mari kita proses pengiriman Anda.\n\n📍 *Langkah 1/4: Lokasi Pengambilan*\nKetik alamat lengkap tempat kurir mengambil barang:`;
+    await this.client.sendMessage(to, text);
   }
 
   async sendOjekForm(to) {
-    const tarif = Formatter.formatCurrency(config.pricing.ojek);
-    
-    const formText = `📋 *FORM PEMESANAN OJEK*
-💰 Tarif: ${tarif}
-
-Silakan isi form berikut dengan format yang benar:
-
-Nama Penumpang: [Isi]
-Nomor HP: [Isi]
-Lokasi Jemput: [Alamat lengkap]
-Patokan Lokasi Jemput: [Landmark/detail]
-Lokasi Tujuan: [Alamat lengkap]
-Patokan Lokasi Tujuan: [Landmark/detail]
-Jumlah Penumpang: [1/2]
-Waktu Jemput: [ASAP/Jam]
-Metode Pembayaran: [COD/Transfer/E-wallet]
-Catatan Tambahan: [Opsional]
-
-_Kirim form yang sudah diisi!_`;
-
-    await this.client.sendMessage(to, formText);
+    const text = `🛵 Siap antar jemput!\n\n📍 *Langkah 1/3: Lokasi Jemput*\nKetik alamat kamu berada sekarang:`;
+    await this.client.sendMessage(to, text);
   }
 
   // PERBAIKAN: Hanya terima chatId dengan format @c.us
