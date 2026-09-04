@@ -1,9 +1,15 @@
 const config = require('../config/config');
 const Formatter = require('../utils/formatter');
+const { sendWithDelay } = require('../utils/messageSender');
 
 class NotificationService {
   constructor(client) {
     this.client = client;
+  }
+
+  // Helper dengan delay manusiawi
+  async send(to, text, options = {}) {
+    return sendWithDelay(this.client, to, text, options);
   }
 
   async sendOptions(to, text, options) {
@@ -14,10 +20,10 @@ class NotificationService {
       });
       message += '\n_Balas dengan nomor pilihan Anda_';
       
-      await this.client.sendMessage(to, message);
+      await this.send(to, message);
     } catch (error) {
       console.error('Error sending options:', error);
-      await this.client.sendMessage(to, text);
+      await this.send(to, text);
     }
   }
 
@@ -34,17 +40,17 @@ Silakan pilih layanan yang Anda butuhkan:
 
 _Balas dengan nomor pilihan (1 atau 2)_`;
     
-    await this.client.sendMessage(to, text);
+    await this.send(to, text);
   }
 
   async sendPengirimanForm(to) {
     const text = `📦 Siap! Mari kita proses pengiriman Anda.\n\n📍 *Langkah 1/4: Lokasi Pengambilan*\nKetik alamat lengkap tempat kurir mengambil barang:`;
-    await this.client.sendMessage(to, text);
+    await this.send(to, text);
   }
 
   async sendOjekForm(to) {
     const text = `🛵 Siap antar jemput!\n\n📍 *Langkah 1/3: Lokasi Jemput*\nKetik alamat kamu berada sekarang:`;
-    await this.client.sendMessage(to, text);
+    await this.send(to, text);
   }
 
   // PERBAIKAN: Hanya terima chatId dengan format @c.us
@@ -66,7 +72,7 @@ Balas dengan:
 1 = Terima Orderan
 2 = Tolak Orderan`;
 
-      await this.client.sendMessage(driverChatId, message);
+      await this.send(driverChatId, message);
       console.log(`✅ Order notification sent successfully to ${driverChatId}`);
       
     } catch (error) {
@@ -77,7 +83,7 @@ Balas dengan:
 
   async sendOrderDetailsToDriver(driverChatId, orderDetails) {
     try {
-      await this.client.sendMessage(driverChatId, orderDetails);
+      await this.send(driverChatId, orderDetails);
       
       const actionText = `\n📍 *INSTRUKSI DRIVER:*
 
@@ -87,7 +93,7 @@ Setelah selesai mengantarkan:
 
 _Selamat bekerja! 🏍️_`;
       
-      await this.client.sendMessage(driverChatId, actionText);
+      await this.send(driverChatId, actionText);
       
     } catch (error) {
       console.error('Error sending order details:', error);
@@ -104,7 +110,7 @@ Terima kasih! Pesanan Anda telah kami terima.
 🔍 Kami sedang mencarikan driver untuk Anda.
 ⏳ Mohon tunggu sebentar...`;
 
-    await this.client.sendMessage(customerPhone, message);
+    await this.send(customerPhone, message);
   }
 
   async sendDriverFound(customerPhone, driverName, orderNumber) {
@@ -116,7 +122,7 @@ Terima kasih! Pesanan Anda telah kami terima.
 📞 Driver akan segera menghubungi Anda.
 ⏱️ Estimasi waktu: 5-10 menit 🏍️`;
 
-    await this.client.sendMessage(customerPhone, message);
+    await this.send(customerPhone, message);
   }
 
   async sendCompletionMessage(customerPhone, orderNumber, driverName) {
@@ -132,7 +138,7 @@ Terima kasih telah menggunakan layanan *Kurir Kan*! 🎉
 
 💬 Ingin pesan lagi? Ketik "pesan" atau "menu"`;
 
-    await this.client.sendMessage(customerPhone, message);
+    await this.send(customerPhone, message);
   }
 
   async sendQueueNotification(customerPhone, orderNumber) {
@@ -148,7 +154,7 @@ Balas dengan:
 1 = Ya, Masuk Antrian
 2 = Tidak, Batalkan Pesanan`;
 
-    await this.client.sendMessage(customerPhone, message);
+    await this.send(customerPhone, message);
   }
 
   async sendQueuedConfirmation(customerPhone, orderNumber) {
@@ -161,7 +167,7 @@ Pesanan Anda (${orderNumber}) telah masuk antrian.
 
 Terima kasih atas kesabaran Anda! 🙏`;
 
-    await this.client.sendMessage(customerPhone, message);
+    await this.send(customerPhone, message);
   }
 
   async sendCancellationMessage(customerPhone, orderNumber, reason) {
@@ -174,7 +180,7 @@ Mohon maaf, pesanan Anda telah dibatalkan.
 
 💬 Silakan pesan kembali jika berminat. Ketik "pesan"`;
 
-    await this.client.sendMessage(customerPhone, message);
+    await this.send(customerPhone, message);
   }
 
   async sendDriverStatusUpdate(groupId, driverName, status) {
@@ -186,7 +192,7 @@ Mohon maaf, pesanan Anda telah dibatalkan.
 Driver: ${driverName}
 Status: ${statusText}`;
 
-    await this.client.sendMessage(groupId, message);
+    await this.send(groupId, message);
   }
 }
 

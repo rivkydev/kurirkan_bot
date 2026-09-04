@@ -5,6 +5,7 @@
 require('dotenv').config();
 
 const { Client, LocalAuth } = require('whatsapp-web.js');
+const puppeteer = require('puppeteer');
 const qrcode = require('qrcode-terminal');
 const storage = require('./storage/inMemoryStorage');
 const webServer = require('./services/webServer');
@@ -12,6 +13,18 @@ const webServer = require('./services/webServer');
 // Services
 const NotificationService = require('./services/notificationService');
 const MessageHandler = require('./handlers/messageHandler');
+
+const { exec } = require('child_process');
+let browserOpened = false;
+
+function openDashboard() {
+    if (!browserOpened) {
+        console.log('🌐 Membuka Dashboard di Web Browser...');
+        // Hanya jalan di Windows (menggunakan 'start')
+        exec('start http://localhost:3000');
+        browserOpened = true;
+    }
+}
 
 class KurirBot {
   constructor() {
@@ -31,7 +44,7 @@ class KurirBot {
     }
 
     // Initialize WhatsApp client
-    this.initializeClient();
+    await this.initializeClient();
     this.setupEventHandlers();
 
     // Start Web Server
@@ -44,14 +57,14 @@ class KurirBot {
     this.setupDailyCleanup();
   }
 
-  initializeClient() {
+  async initializeClient() {
     this.client = new Client({
       authStrategy: new LocalAuth({
         clientId: 'kurir-kan-bot'
       }),
       puppeteer: {
         headless: true,
-        executablePath: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+        executablePath: await puppeteer.executablePath(),
         args: ['--no-sandbox', '--disable-setuid-sandbox']
       }
     });
@@ -64,6 +77,7 @@ class KurirBot {
       console.log('📱 Scan QR Code:');
       qrcode.generate(qr, { small: true });
       webServer.emitQR(qr);
+      openDashboard();
     });
 
     this.client.on('ready', async () => {
@@ -71,7 +85,9 @@ class KurirBot {
       console.log('📞 Connected as:', this.client.info.pushname);
       
       storage.isBotConnected = true;
+      webServer.setWhatsAppClient(this.client);
       webServer.emitReady({ pushname: this.client.info.pushname });
+      openDashboard();
 
       this.notificationService = new NotificationService(this.client);
       this.messageHandler = new MessageHandler(this.client, this.notificationService);
@@ -188,7 +204,14 @@ class KurirBot {
 
 // Initialize bot
 const bot = new KurirBot();
-bot.initialize();
+
+const licenseVerifier = require('./utils/license');
+licenseVerifier.verify().then(() => {
+    bot.initialize();
+}).catch(err => {
+    console.error("Failed to verify license", err);
+    process.exit(1);
+});
 
 // Handle shutdown signals
 process.on('SIGINT', () => bot.shutdown());

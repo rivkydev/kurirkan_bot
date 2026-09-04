@@ -51,14 +51,16 @@ echo [1] Mulai Bot ^& Web Dashboard
 echo [2] Perbaiki / Install Ulang Komponen
 echo [3] Buka Web Dashboard Manual
 echo [4] Reset Data (Hapus semua orderan)
+echo [5] Reset Akun WhatsApp (Logout ^& Ganti Nomor)
 echo [0] Keluar
 echo.
-set /p choice="Pilih menu (0-4): "
+set /p choice="Pilih menu (0-5): "
 
 if "%choice%"=="1" goto START_BOT
 if "%choice%"=="2" goto INSTALL
 if "%choice%"=="3" goto OPEN_WEB
 if "%choice%"=="4" goto RESET
+if "%choice%"=="5" goto RESET_WA
 if "%choice%"=="0" exit
 goto MENU
 
@@ -68,12 +70,11 @@ echo =================================================================
 echo                 MENJALANKAN SISTEM BOT...
 echo =================================================================
 echo.
-echo [INFO] Membuka browser ke http://localhost:3000...
-start http://localhost:3000
-
 echo [INFO] Memulai server bot... Jika tertutup sendiri, bot otomatis merestart.
 echo.
 :LOOP
+echo [INFO] Membersihkan sisa proses Chrome di memori...
+taskkill /F /IM chrome.exe /T >nul 2>&1
 node app.js
 echo.
 echo [WARNING] Bot terhenti atau mengalami crash! 
@@ -92,6 +93,8 @@ echo [INFO] Mengunduh modul utama...
 call npm install
 echo [INFO] Mengunduh browser internal (Puppeteer)...
 call npm install puppeteer
+echo [INFO] Mendownload file Chrome (Bisa memakan waktu beberapa menit)...
+call npx puppeteer browsers install chrome
 echo.
 echo [SUCCESS] Semua komponen berhasil diinstall!
 pause
@@ -121,6 +124,32 @@ if /I "%confirm%"=="YAKIN" (
     )
 ) else (
     echo [INFO] Penghapusan dibatalkan.
+)
+pause
+color 0B
+goto MENU
+
+:RESET_WA
+cls
+color 0E
+echo =================================================================
+echo                 RESET AKUN WHATSAPP BOT
+echo =================================================================
+echo.
+echo Peringatan: Anda akan me-logout nomor WhatsApp yang sedang aktif.
+echo Anda perlu melakukan scan QR code baru saat bot dijalankan kembali.
+echo.
+set /p confirmwa="Ketik 'YAKIN' untuk mereset akun WA: "
+if /I "%confirmwa%"=="YAKIN" (
+    if exist ".wwebjs_auth" (
+        rmdir /s /q ".wwebjs_auth"
+        echo [SUCCESS] Sesi WhatsApp berhasil dihapus! 
+        echo [SUCCESS] Silakan jalankan ulang bot untuk memindai QR code baru.
+    ) else (
+        echo [INFO] Tidak ada sesi WhatsApp yang aktif saat ini.
+    )
+) else (
+    echo [INFO] Reset WhatsApp dibatalkan.
 )
 pause
 color 0B

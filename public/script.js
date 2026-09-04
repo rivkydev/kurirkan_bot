@@ -12,7 +12,7 @@ const navBtns = document.querySelectorAll('.nav-btn');
 const sections = document.querySelectorAll('.content-section');
 
 navBtns.forEach(btn => {
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', (e) => {
         // Remove active class
         navBtns.forEach(b => b.classList.remove('active'));
         sections.forEach(s => s.classList.remove('active'));
@@ -22,8 +22,12 @@ navBtns.forEach(btn => {
         const target = btn.getAttribute('data-target');
         document.getElementById(target).classList.add('active');
 
-        // Immediately fetch data for the active tab
-        fetchData();
+        if (target === 'config') {
+            loadConfig();
+        } else {
+            // Immediately fetch data for the active tab
+            fetchData();
+        }
     });
 });
 
@@ -125,19 +129,49 @@ btnSubmitDriver.addEventListener('click', async () => {
             body: JSON.stringify({ name, phone })
         });
         
+        const data = await res.json();
+        
         if (res.ok) {
-            showToast('Driver added successfully!');
             document.getElementById('driver-name').value = '';
             document.getElementById('driver-phone').value = '';
             closeModal();
             fetchData();
+
+            // Tampilkan token aktivasi dengan jelas
+            if (data.token) {
+                const textToCopy = `AKTIVASI ${data.token}`;
+                
+                const tokenModal = document.createElement('div');
+                tokenModal.style = "position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.8);z-index:9999;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(5px);";
+                tokenModal.innerHTML = `
+                    <div style="background:var(--surface);padding:30px;border-radius:15px;max-width:400px;text-align:center;border:1px solid var(--border);box-shadow:0 10px 30px rgba(0,0,0,0.5);">
+                        <div style="font-size:3rem;margin-bottom:10px;">🎉</div>
+                        <h2 style="color:var(--success);margin-bottom:15px;">Driver Berhasil Ditambahkan!</h2>
+                        <p style="margin-bottom:15px;color:var(--text-secondary);">Minta <b>${data.name}</b> untuk mengirim teks ini ke dalam grup absen driver:</p>
+                        <div style="background:var(--bg);padding:15px;border-radius:8px;margin-bottom:20px;font-family:monospace;font-size:1.2rem;font-weight:bold;letter-spacing:2px;color:var(--primary);border:1px dashed var(--primary);user-select:all;">
+                            ${textToCopy}
+                        </div>
+                        <p style="font-size:0.8rem;color:var(--danger);margin-bottom:20px;">⚠️ Token hanya berlaku selama 24 jam</p>
+                        <div style="display:flex;gap:10px;justify-content:center;">
+                            <button class="primary-btn" onclick="navigator.clipboard.writeText('${textToCopy}').then(() => showToast('Berhasil disalin!', 'success'))" style="flex:1;display:flex;align-items:center;justify-content:center;gap:8px;">
+                                <span>📋</span> Copy Teks
+                            </button>
+                            <button class="danger-btn" onclick="this.parentElement.parentElement.parentElement.remove()" style="flex:1;">Tutup</button>
+                        </div>
+                    </div>
+                `;
+                document.body.appendChild(tokenModal);
+            } else {
+                showToast('Driver added successfully!');
+            }
         } else {
-            showToast('Failed to add driver', 'error');
+            showToast(data.error || 'Failed to add driver', 'error');
         }
     } catch (err) {
         showToast('Server error', 'error');
     }
 });
+
 
 // Toast Notifications
 function showToast(message, type = 'success') {
@@ -382,6 +416,148 @@ window.cancelOrder = async (id) => {
     }
 };
 
+// ==========================================
+// CONFIGURATION LOGIC
+// ==========================================
+
+let systemConfig = {};
+
+async function loadConfig() {
+    try {
+        const res = await fetch('/api/config');
+        systemConfig = await res.json();
+        
+        const is24hCheckbox = document.getElementById('config-24h');
+        if(is24hCheckbox) {
+            is24hCheckbox.checked = systemConfig.is24Hours;
+            document.getElementById('config-open').value = systemConfig.openTime || '08:00';
+            document.getElementById('config-close').value = systemConfig.closeTime || '22:00';
+            toggleHoursInputs();
+        }
+
+        const groupsContainer = document.getElementById('config-groups-list');
+        if(groupsContainer) {
+            groupsContainer.innerHTML = '<p style="color: var(--text-secondary);">Loading groups from WhatsApp...</p>';
+            const groupsRes = await fetch('/api/groups');
+            const groups = await groupsRes.json();
+            
+            groupsContainer.innerHTML = '';
+            
+            if (groups.length === 0) {
+                groupsContainer.innerHTML = `
+                    <div style="background: rgba(239, 68, 68, 0.1); border: 1px solid var(--danger); padding: 15px; border-radius: 8px; color: var(--danger);">
+                        No Admin groups found! Make sure the bot is connected to WhatsApp and has been promoted to Admin in your driver groups.
+                    </div>`;
+            } else {
+                groups.forEach(g => {
+                    const isChecked = (systemConfig.attendanceGroups || []).includes(g.id) ? 'checked' : '';
+                    groupsContainer.innerHTML += `
+                        <label style="display: flex; align-items: center; gap: 15px; padding: 15px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; cursor: pointer; transition: 0.2s;">
+                            <input type="checkbox" class="group-checkbox" value="${g.id}" ${isChecked} style="width: 20px; height: 20px; accent-color: var(--primary);">
+                            <span style="font-weight: 600; font-size: 1.1rem;">${g.name}</span>
+                        </label>
+                    `;
+                });
+            }
+        }
+    } catch (err) {
+        showToast('Error loading configuration', 'error');
+    }
+}
+
+document.getElementById('config-24h')?.addEventListener('change', toggleHoursInputs);
+
+function toggleHoursInputs() {
+    const is24h = document.getElementById('config-24h');
+    const inputs = document.getElementById('config-hours-inputs');
+    if (!is24h || !inputs) return;
+
+    if (is24h.checked) {
+        inputs.style.opacity = '0.3';
+        inputs.style.pointerEvents = 'none';
+    } else {
+        inputs.style.opacity = '1';
+        inputs.style.pointerEvents = 'auto';
+    }
+}
+
+document.getElementById('btn-save-config')?.addEventListener('click', async () => {
+    const is24Hours = document.getElementById('config-24h').checked;
+    const openTime = document.getElementById('config-open').value;
+    const closeTime = document.getElementById('config-close').value;
+    
+    const checkboxes = document.querySelectorAll('.group-checkbox:checked');
+    const attendanceGroups = Array.from(checkboxes).map(cb => cb.value);
+    
+    try {
+        const res = await fetch('/api/config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ is24Hours, openTime, closeTime, attendanceGroups })
+        });
+        const data = await res.json();
+        if (data.success) {
+            showToast('Configuration saved successfully!', 'success');
+        }
+    } catch (err) {
+        showToast('Error saving configuration', 'error');
+    }
+});
+
 // Auto-refresh data every 5 seconds
 setInterval(fetchData, 5000);
 fetchData();
+
+// ===== CREATE GROUP MODAL =====
+document.getElementById('btn-open-create-group')?.addEventListener('click', () => {
+    document.getElementById('create-group-modal').classList.add('active');
+});
+
+document.getElementById('close-create-group-modal')?.addEventListener('click', () => {
+    document.getElementById('create-group-modal').classList.remove('active');
+});
+
+document.getElementById('cancel-create-group')?.addEventListener('click', () => {
+    document.getElementById('create-group-modal').classList.remove('active');
+});
+
+document.getElementById('submit-create-group')?.addEventListener('click', async () => {
+    const groupName = document.getElementById('create-group-name').value.trim();
+    const participantsRaw = document.getElementById('create-group-participants').value.trim();
+    
+    if (!groupName) {
+        showToast('Nama grup tidak boleh kosong!', 'error');
+        return;
+    }
+
+    const participants = participantsRaw
+        ? participantsRaw.split(',').map(p => p.trim()).filter(p => p.length > 0)
+        : [];
+
+    const submitBtn = document.getElementById('submit-create-group');
+    submitBtn.disabled = true;
+    submitBtn.textContent = '⏳ Membuat grup...';
+
+    try {
+        const res = await fetch('/api/create-group', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ groupName, participants })
+        });
+        const data = await res.json();
+
+        if (data.success) {
+            showToast(`✅ Grup "${data.groupName}" berhasil dibuat! Bot sudah jadi Admin.`, 'success');
+            document.getElementById('create-group-modal').classList.remove('active');
+            // Refresh daftar grup di config
+            setTimeout(() => loadConfig(), 1000);
+        } else {
+            showToast(`❌ Gagal: ${data.error}`, 'error');
+        }
+    } catch (err) {
+        showToast('Error membuat grup: ' + err.message, 'error');
+    } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = '🚀 Buat Grup Sekarang';
+    }
+});

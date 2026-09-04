@@ -26,6 +26,15 @@ class InMemoryStorage {
     this.adminLID = '8637615485122'; // DRV001 LID (detected from chat)
     this.dailyDepositRequired = 5000; // Rp 5.000
 
+    // Config
+    this.config = {
+        is24Hours: true,
+        openTime: '08:00',
+        closeTime: '22:00',
+        attendanceGroups: [],
+        knownGroups: {}
+    };
+
     // System State
     this.isBotConnected = false;
   }
@@ -36,6 +45,30 @@ class InMemoryStorage {
     // LID format: 8637615485122 (without @lid suffix)
     const normalizedLID = lid.replace('@lid', '').replace('@c.us', '').replace(/[\s-]/g, '');
     return normalizedLID === this.adminLID;
+  }
+
+  // Record known groups for dashboard config
+  addKnownGroup(groupId, groupName) {
+      if (!this.config.knownGroups) this.config.knownGroups = {};
+      if (this.config.knownGroups[groupId] !== groupName) {
+          this.config.knownGroups[groupId] = groupName;
+          this.saveToFile();
+      }
+  }
+
+  // Auto-learn LID driver dari pesan grup (solusi multi-device)
+  updateDriverLID(driverId, newLid) {
+      const driver = this.drivers.get(driverId);
+      if (!driver) return;
+      const cleanLid = newLid.replace(/@.*/, '');
+      if (driver.lid !== cleanLid) {
+          // Hapus index LID lama jika ada
+          if (driver.lid) this.driversByLID.delete(driver.lid);
+          driver.lid = cleanLid;
+          this.driversByLID.set(cleanLid, driverId);
+          console.log(`🔄 Auto-updated LID for driver ${driver.name}: ${cleanLid}`);
+          this.saveToFile();
+      }
   }
 
   // Generate registration token
@@ -292,6 +325,7 @@ class InMemoryStorage {
       completedAt: null,
       cancelledAt: null,
       cancellationReason: null,
+      triedDrivers: [],
       timeline: [
         { status: 'NEW', timestamp: new Date(), note: 'Order created' }
       ],
@@ -490,6 +524,7 @@ class InMemoryStorage {
       deposits: Array.from(this.deposits.entries()),
       registrationTokens: Array.from(this.registrationTokens.entries()),
       orderCounter: this.orderCounter,
+      config: this.config,
       exportedAt: new Date()
     };
   }
@@ -534,6 +569,10 @@ class InMemoryStorage {
 
     if (data.orderCounter) {
       this.orderCounter = data.orderCounter;
+    }
+
+    if (data.config) {
+      this.config = { ...this.config, ...data.config };
     }
 
     return true;

@@ -4,24 +4,90 @@
       "DRV001",
       {
         "driverId": "DRV001",
-        "name": "asdasd",
+        "name": "driver 1",
         "phone": "085823358559",
-        "status": "Off Duty",
+        "lid": "8637615485122",
+        "status": "On Duty",
         "currentOrder": null,
-        "totalOrders": 0,
-        "todayOrders": 0,
+        "totalOrders": 1,
+        "todayOrders": 1,
         "isActive": true,
         "isSuspended": false,
         "suspensionReason": null,
-        "lastStatusUpdate": "2026-08-31T14:52:34.589Z",
-        "createdAt": "2026-08-31T14:52:34.589Z"
+        "lastStatusUpdate": "2026-09-04T06:14:53.219Z",
+        "createdAt": "2026-09-04T06:14:43.000Z"
       }
     ]
   ],
-  "orders": [],
+  "orders": [
+    [
+      "KRK-20260904-001",
+      {
+        "orderNumber": "KRK-20260904-001",
+        "orderType": "Ojek",
+        "status": "DELIVERED",
+        "customer": {
+          "phone": "134557768618005",
+          "name": "Kurirkan",
+          "chatId": "134557768618005@lid"
+        },
+        "assignedDriver": "DRV001",
+        "assignedAt": "2026-09-04T06:15:36.563Z",
+        "completedAt": "2026-09-04T06:18:08.146Z",
+        "cancelledAt": null,
+        "cancellationReason": null,
+        "triedDrivers": [
+          "DRV001"
+        ],
+        "timeline": [
+          {
+            "status": "NEW",
+            "timestamp": "2026-09-04T06:15:27.302Z",
+            "note": "Order created"
+          },
+          {
+            "status": "AWAITING_DRIVER",
+            "timestamp": "2026-09-04T06:15:28.597Z",
+            "note": ""
+          },
+          {
+            "status": "ASSIGNED",
+            "timestamp": "2026-09-04T06:15:36.563Z",
+            "note": "Assigned to driver DRV001"
+          },
+          {
+            "status": "DELIVERED",
+            "timestamp": "2026-09-04T06:18:08.146Z",
+            "note": "Completed by driver"
+          }
+        ],
+        "createdAt": "2026-09-04T06:15:27.302Z",
+        "ojek": {
+          "namaPenumpang": "Kurirkan",
+          "nomorHp": "134557768618005",
+          "lokasiJemput": "sss",
+          "lokasiTujuan": "ddd",
+          "jumlahPenumpang": 1,
+          "waktuJemput": "ASAP",
+          "metodePembayaran": "COD",
+          "price": 10000,
+          "distance": 5
+        }
+      }
+    ]
+  ],
   "queue": [],
   "deposits": [],
   "registrationTokens": [],
-  "orderCounter": 0,
-  "exportedAt": "2026-08-31T14:57:17.383Z"
+  "orderCounter": 1,
+  "config": {
+    "is24Hours": true,
+    "openTime": "08:00",
+    "closeTime": "22:00",
+    "attendanceGroups": [],
+    "knownGroups": {
+      "120363412647413469@g.us": "Demo Kurir Kan"
+    }
+  },
+  "exportedAt": "2026-09-04T06:18:50.367Z"
 }

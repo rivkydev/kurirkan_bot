@@ -6,6 +6,7 @@ const adminService = require('../services/adminServices');
 const storage = require('../storage/inMemoryStorage');
 const config = require('../config/config');
 const Formatter = require('../utils/formatter');
+const { sendWithDelay, interMessageDelay } = require('../utils/messageSender');
 
 class MessageHandler {
   constructor(client, notificationService) {
@@ -16,7 +17,16 @@ class MessageHandler {
     this.driverTimeouts = new Map();
   }
 
+  // Helper: kirim pesan dengan delay manusiawi biar nggak kena flag spam WA
+  async send(chatId, text, options = {}) {
+    return sendWithDelay(this.client, chatId, text, options);
+  }
+
   async handleMessage(message) {
+    // KRITIS: Jangan pernah balas pesan dari bot sendiri atau pesan kosong
+    if (message.fromMe) return;
+    if (!message.body || !message.body.trim()) return;
+
     const chatId = message.from;
     const text = message.body.trim();
     const isGroup = message.from.endsWith('@g.us');
@@ -28,61 +38,101 @@ class MessageHandler {
       return;
     }
 
+    // Jangan proses pesan pribadi dari nomor driver terdaftar sebagai customer
+    // Driver berkomunikasi via grup, bukan chat pribadi ke bot
+    const senderRaw = chatId.replace(/@.*/, '');
+    const senderAsLocal = senderRaw.startsWith('62') ? '0' + senderRaw.slice(2) : senderRaw;
+    if (storage.getDriverByPhone(senderRaw) || storage.getDriverByPhone(senderAsLocal)) {
+      console.log(`[SKIP] Pesan dari driver ${senderRaw} di chat pribadi diabaikan.`);
+      return;
+    }
+
     await this.handlePrivateMessage(message);
   }
 
   async handleGroupMessage(message) {
-    const text = message.body.trim().toLowerCase();
-    const sender = message.author || message.from;
+    const text = message.body.trim();
+    const textLower = text.toLowerCase();
+    const authorId = message.author || message.from;
+    const authorLID = authorId.replace(/@.*/, '');
+
+    // ===== AKTIVASI DRIVER DI GRUP =====
+    // Driver ketik "AKTIVASI <token>" di grup untuk aktivasi akun
+    // Ini dilakukan SEBELUM cek attendance group agar bisa aktivasi dari grup manapun
+    if (textLower.startsWith('aktivasi ')) {
+      const token = text.split(' ')[1];
+      if (!token) return;
+
+      try {
+        // Gunakan LID dari grup (message.author) sebagai identifier driver
+        const driver = storage.useRegistrationToken(token, authorLID);
+        storage.saveToFile();
+        await this.send(
+          message.from,
+          `✅ *${driver.name}* berhasil terdaftar sebagai driver!\nKamu sekarang bisa mengetik *On Duty* / *Off Duty* di sini. 🏍️`
+        );
+        console.log(`✅ Driver ${driver.name} activated via group with LID: ${authorLID}`);
+      } catch (err) {
+        await this.send(
+          message.from,
+          `❌ Aktivasi gagal: ${err.message}\nPastikan token benar dan belum kadaluarsa.`
+        );
+      }
+      return;
+    }
+
+    // ENFORCE ATTENDANCE GROUP
+    if (storage.config.attendanceGroups && storage.config.attendanceGroups.length > 0) {
+        if (!storage.config.attendanceGroups.includes(message.from)) {
+            return;
+        }
+    }
 
     try {
-      // Extract phone/LID dari sender
-      const senderPhone = sender.replace('@c.us', '').replace('@s.whatsapp.net', '').replace('@lid', '');
-      
-      // Cek driver berdasarkan phone atau LID
-      let driver = storage.getDriverByPhone(senderPhone);
-      if (!driver) {
-        driver = storage.getDriverByLID(senderPhone);
-      }
+      // Cari driver berdasarkan LID (group message always uses LID in multi-device)
+      let driver = storage.getDriverByLID(authorLID);
       
       if (!driver) {
-        console.log(`❌ Sender ${senderPhone} is not a registered driver`);
+        console.log(`❌ LID ${authorLID} is not a registered driver`);
         return;
       }
+      
+      // Auto-update LID jika berubah (misalnya reinstall WA)
+      storage.updateDriverLID(driver.driverId, authorLID);
 
       console.log(`✅ Driver found: ${driver.name} (ID: ${driver.driverId})`);
 
       // Status updates
-      if (text === 'on duty') {
+      if (textLower === 'on duty') {
         try {
           storage.updateDriverStatus(driver.driverId, 'On Duty');
-          await this.client.sendMessage(
+          await this.send(
             message.from,
             `✅ Status ${driver.name}: *ON DUTY*\nSiap menerima orderan! 🏍️`
           );
           await this.processQueue();
         } catch (error) {
-          await this.client.sendMessage(
+          await this.send(
             message.from,
             `❌ ${driver.name}: ${error.message}`
           );
         }
         
-      } else if (text === 'off duty') {
+      } else if (textLower === 'off duty') {
         if (driver.currentOrder) {
-          await this.client.sendMessage(
+          await this.send(
             message.from,
             `⚠️ ${driver.name}, Anda masih memiliki orderan aktif. Selesaikan orderan terlebih dahulu.`
           );
         } else {
           storage.updateDriverStatus(driver.driverId, 'Off Duty');
-          await this.client.sendMessage(
+          await this.send(
             message.from,
             `✅ Status ${driver.name}: *OFF DUTY*\nIstirahat dulu ya! 😴`
           );
         }
         
-      } else if (text === 'status') {
+      } else if (textLower === 'status') {
         const allDrivers = storage.getAllDrivers();
         let statusText = `📊 *STATUS SEMUA DRIVER*\n\n`;
         
@@ -93,11 +143,11 @@ class MessageHandler {
           statusText += `   Orderan saat ini: ${d.currentOrder || '-'}\n\n`;
         });
 
-        await this.client.sendMessage(message.from, statusText);
+        await this.send(message.from, statusText);
         
-      } else if (text === 'queue' || text === 'antrian') {
+      } else if (textLower === 'queue' || textLower === 'antrian') {
         const queueSize = await queueService.getQueueSize();
-        await this.client.sendMessage(
+        await this.send(
           message.from,
           `📝 Jumlah orderan dalam antrian: *${queueSize}*`
         );
@@ -105,7 +155,7 @@ class MessageHandler {
       
     } catch (error) {
       console.error('Error handling group message:', error);
-      await this.client.sendMessage(
+      await this.send(
         message.from,
         `❌ Error: ${error.message}`
       );
@@ -129,7 +179,7 @@ class MessageHandler {
       if (command.toLowerCase() === '/daftar' && args.length > 0) {
         const token = args[0];
         const result = await adminService.registerDriverStep2(token, senderPhone);
-        await this.client.sendMessage(chatId, result.message);
+        await this.send(chatId, result.message);
         
         if (result.success) {
           storage.saveToFile();
@@ -140,7 +190,7 @@ class MessageHandler {
       // Check for admin command
       const adminResponse = await adminService.handleAdminCommand(command, senderPhone, args);
       if (adminResponse) {
-        await this.client.sendMessage(chatId, adminResponse);
+        await this.send(chatId, adminResponse);
         return;
       }
     }
@@ -162,7 +212,7 @@ class MessageHandler {
       
     } catch (error) {
       console.error('Error handling private message:', error);
-      await this.client.sendMessage(
+      await this.send(
         chatId,
         `❌ Terjadi kesalahan: ${error.message}\n\nSilakan coba lagi atau hubungi admin.`
       );
@@ -173,8 +223,34 @@ class MessageHandler {
     const chatId = message.from;
     const text = message.body.trim();
     const lowerText = text.toLowerCase();
+    
+    const isOrderTrigger = (lowerText === 'pesan' || lowerText === 'menu' || lowerText === '/start' || lowerText === 'order');
 
-    if (lowerText === 'pesan' || lowerText === 'menu' || lowerText === '/start' || lowerText === 'order') {
+    // ENFORCE OPERATING HOURS
+    if (!storage.config.is24Hours) {
+        const now = new Date();
+        const currentMins = now.getHours() * 60 + now.getMinutes();
+        const [openH, openM] = storage.config.openTime.split(':').map(Number);
+        const [closeH, closeM] = storage.config.closeTime.split(':').map(Number);
+        const openMins = openH * 60 + openM;
+        const closeMins = closeH * 60 + closeM;
+        
+        let isOpen = false;
+        if (closeMins < openMins) {
+            isOpen = currentMins >= openMins || currentMins <= closeMins;
+        } else {
+            isOpen = currentMins >= openMins && currentMins <= closeMins;
+        }
+        
+        if (!isOpen) {
+            if (userState.step === 'idle' || isOrderTrigger) {
+                await this.send(chatId, `Maaf, layanan kami saat ini sedang tutup. 🌙\nKami beroperasi kembali dari pukul *${storage.config.openTime}* hingga *${storage.config.closeTime}*.\n\nSilakan hubungi kami lagi nanti!`);
+            }
+            return; // Block execution
+        }
+    }
+
+    if (isOrderTrigger) {
       await this.notification.sendWelcome(chatId);
       this.userStates.set(chatId, { step: 'waiting_service_choice' });
       return;
@@ -196,7 +272,7 @@ class MessageHandler {
           this.userStates.set(chatId, { step: 'ojek_1_pickup', tempData: {} });
           
         } else {
-          await this.client.sendMessage(
+          await this.send(
             chatId,
             'Maaf, pilihan tidak valid. Silakan pilih:\n1. Pengiriman Barang\n2. Ojek'
           );
@@ -205,20 +281,20 @@ class MessageHandler {
 
       case 'pengiriman_1_pickup':
         userState.tempData.lokasiPengambilan = text;
-        await this.client.sendMessage(chatId, "🎯 *Langkah 2/4: Lokasi Tujuan*\nKetik alamat tujuan pengiriman barang:");
+        await this.send(chatId, "🎯 *Langkah 2/4: Lokasi Tujuan*\nKetik alamat tujuan pengiriman barang:");
         this.userStates.set(chatId, { step: 'pengiriman_2_delivery', tempData: userState.tempData });
         break;
 
       case 'pengiriman_2_delivery':
         userState.tempData.lokasiPengantaran = text;
-        await this.client.sendMessage(chatId, "📋 *Langkah 3/4: Detail Barang & Penerima*\nKetik isi paket dan nama/HP penerimanya.\n_(Contoh: Sepatu - Budi 0812345)_");
+        await this.send(chatId, "📋 *Langkah 3/4: Detail Barang & Penerima*\nKetik isi paket dan nama/HP penerimanya.\n_(Contoh: Sepatu - Budi 0812345)_");
         this.userStates.set(chatId, { step: 'pengiriman_3_items', tempData: userState.tempData });
         break;
 
       case 'pengiriman_3_items':
         userState.tempData.deskripsiPesanan = text;
         const confPengiriman = `✅ *Langkah 4/4: Konfirmasi Order*\n\n📍 *Ambil:* ${userState.tempData.lokasiPengambilan}\n🎯 *Tujuan:* ${userState.tempData.lokasiPengantaran}\n📦 *Barang:* ${userState.tempData.deskripsiPesanan}\n💰 *Estimasi:* Rp ${config.pricing.pengiriman.toLocaleString('id-ID')}\n\nKetik *SETUJU* untuk mencari kurir, atau *BATAL* untuk membatalkan.`;
-        await this.client.sendMessage(chatId, confPengiriman);
+        await this.send(chatId, confPengiriman);
         this.userStates.set(chatId, { step: 'pengiriman_4_confirm', tempData: userState.tempData });
         break;
 
@@ -226,21 +302,21 @@ class MessageHandler {
         if (lowerText === 'setuju' || lowerText === 'ya') {
             await this.processFinalPengiriman(chatId, userState.tempData, message);
         } else {
-            await this.client.sendMessage(chatId, "❌ Pesanan dibatalkan. Ketik *pesan* untuk memulai ulang.");
+            await this.send(chatId, "❌ Pesanan dibatalkan. Ketik *pesan* untuk memulai ulang.");
             this.userStates.delete(chatId);
         }
         break;
 
       case 'ojek_1_pickup':
         userState.tempData.lokasiJemput = text;
-        await this.client.sendMessage(chatId, "🎯 *Langkah 2/3: Lokasi Tujuan*\nKetik alamat tujuan yang mau kamu tuju:");
+        await this.send(chatId, "🎯 *Langkah 2/3: Lokasi Tujuan*\nKetik alamat tujuan yang mau kamu tuju:");
         this.userStates.set(chatId, { step: 'ojek_2_delivery', tempData: userState.tempData });
         break;
 
       case 'ojek_2_delivery':
         userState.tempData.lokasiTujuan = text;
         const confOjek = `✅ *Langkah 3/3: Konfirmasi Order*\n\n📍 *Jemput:* ${userState.tempData.lokasiJemput}\n🎯 *Tujuan:* ${userState.tempData.lokasiTujuan}\n💰 *Estimasi:* Rp ${config.pricing.ojek.toLocaleString('id-ID')}\n\nKetik *SETUJU* untuk memanggil driver, atau *BATAL*.`;
-        await this.client.sendMessage(chatId, confOjek);
+        await this.send(chatId, confOjek);
         this.userStates.set(chatId, { step: 'ojek_3_confirm', tempData: userState.tempData });
         break;
 
@@ -248,7 +324,7 @@ class MessageHandler {
         if (lowerText === 'setuju' || lowerText === 'ya') {
             await this.processFinalOjek(chatId, userState.tempData, message);
         } else {
-            await this.client.sendMessage(chatId, "❌ Pesanan dibatalkan. Ketik *pesan* untuk memulai ulang.");
+            await this.send(chatId, "❌ Pesanan dibatalkan. Ketik *pesan* untuk memulai ulang.");
             this.userStates.delete(chatId);
         }
         break;
@@ -356,9 +432,20 @@ class MessageHandler {
 
   async sendOrderToDriverWithTimeout(driver, order, timeout = 60000) {
     try {
+      // Track tried drivers to avoid infinite loops
+      const currentOrder = await orderService.getOrderByNumber(order.orderNumber);
+      if (!currentOrder.triedDrivers) currentOrder.triedDrivers = [];
+      if (!currentOrder.triedDrivers.includes(driver.driverId)) {
+        currentOrder.triedDrivers.push(driver.driverId);
+      }
+
       // PERBAIKAN: Gunakan phone dengan @c.us, JANGAN gunakan LID
       let phoneToSend = driver.phone;
-      if (phoneToSend.startsWith('8')) phoneToSend = '62' + phoneToSend;
+      if (phoneToSend.startsWith('0')) {
+        phoneToSend = '62' + phoneToSend.slice(1);
+      } else if (phoneToSend.startsWith('8')) {
+        phoneToSend = '62' + phoneToSend;
+      }
       const driverChatId = `${phoneToSend}@c.us`;
       
       console.log(`📤 Sending order ${order.orderNumber} to driver ${driver.name} (Phone: ${driverChatId})`);
@@ -391,8 +478,12 @@ class MessageHandler {
 
   async tryNextDriver(order) {
     const availableDrivers = await driverService.getAvailableDrivers();
+    const currentOrder = await orderService.getOrderByNumber(order.orderNumber);
+    const triedDrivers = currentOrder.triedDrivers || [];
+    
+    const nextDrivers = availableDrivers.filter(d => !triedDrivers.includes(d.driverId));
 
-    if (availableDrivers.length === 0) {
+    if (nextDrivers.length === 0) {
       await queueService.addToQueue(order.orderNumber);
       await this.notification.sendQueuedConfirmation(
         order.customer.chatId,
@@ -401,7 +492,7 @@ class MessageHandler {
       return;
     }
 
-    const nextDriver = availableDrivers[0];
+    const nextDriver = nextDrivers[0];
     await this.sendOrderToDriverWithTimeout(nextDriver, order);
   }
 
@@ -422,7 +513,7 @@ class MessageHandler {
       await this.handleDriverCancelOrder(driver, chatId);
       
     } else {
-      await this.client.sendMessage(
+      await this.send(
         chatId,
         `Halo ${driver.name}! 👋\n\nGunakan perintah:\n- "On Duty" di grup untuk siap menerima orderan\n- "Off Duty" di grup untuk istirahat`
       );
@@ -442,7 +533,7 @@ class MessageHandler {
     }
 
     if (!orderId) {
-      await this.client.sendMessage(chatId, '❌ Tidak ada orderan yang menunggu konfirmasi.');
+      await this.send(chatId, '❌ Tidak ada orderan yang menunggu konfirmasi.');
       return;
     }
 
@@ -452,13 +543,22 @@ class MessageHandler {
 
     const orderDetails = orderService.formatOrderDetails(order);
     await this.notification.sendOrderDetailsToDriver(chatId, orderDetails);
+
+    // PERBAIKAN: Kirim kontak customer (VCard) agar kurir bisa menelepon/chat langsung walaupun ID-nya @lid
+    try {
+      const customerContact = await this.client.getContactById(order.customer.chatId);
+      await this.client.sendMessage(chatId, customerContact);
+      await this.send(chatId, "📌 *Ketuk/Tap kontak di atas* untuk langsung mengirim pesan ke pemesan!");
+    } catch (e) {
+      console.log('Gagal mengambil/mengirim kontak customer:', e.message);
+    }
     await this.notification.sendDriverFound(
       order.customer.chatId,
       driver.name,
       order.orderNumber
     );
 
-    await this.client.sendMessage(
+    await this.send(
       chatId,
       `✅ Orderan ${order.orderNumber} berhasil diambil!\n\nSelamat bekerja! 🏍️`
     );
@@ -477,17 +577,17 @@ class MessageHandler {
     }
 
     if (!order) {
-      await this.client.sendMessage(chatId, '❌ Tidak ada orderan yang menunggu konfirmasi.');
+      await this.send(chatId, '❌ Tidak ada orderan yang menunggu konfirmasi.');
       return;
     }
 
-    await this.client.sendMessage(chatId, `Orderan ${order.orderNumber} ditolak.`);
+    await this.send(chatId, `Orderan ${order.orderNumber} ditolak.`);
     await this.tryNextDriver(order);
   }
 
   async handleDriverCompleteOrder(driver, chatId) {
     if (!driver.currentOrder) {
-      await this.client.sendMessage(chatId, '❌ Anda tidak memiliki orderan aktif.');
+      await this.send(chatId, '❌ Anda tidak memiliki orderan aktif.');
       return;
     }
 
@@ -500,7 +600,7 @@ class MessageHandler {
       driver.name
     );
 
-    await this.client.sendMessage(
+    await this.send(
       chatId,
       `✅ Orderan ${order.orderNumber} selesai!\n\nTerima kasih! Anda sudah siap menerima orderan baru.`
     );
@@ -510,7 +610,7 @@ class MessageHandler {
 
   async handleDriverCancelOrder(driver, chatId) {
     if (!driver.currentOrder) {
-      await this.client.sendMessage(chatId, '❌ Anda tidak memiliki orderan aktif.');
+      await this.send(chatId, '❌ Anda tidak memiliki orderan aktif.');
       return;
     }
 
@@ -525,7 +625,7 @@ class MessageHandler {
       reason
     );
 
-    await this.client.sendMessage(
+    await this.send(
       chatId,
       `Orderan ${order.orderNumber} dibatalkan.\n\nAnda sudah siap menerima orderan baru.`
     );
@@ -543,7 +643,7 @@ class MessageHandler {
       
     } else {
       await orderService.cancelOrder(userState.orderId, 'Dibatalkan oleh customer - tidak ada driver');
-      await this.client.sendMessage(
+      await this.send(
         chatId,
         '❌ Pesanan dibatalkan.\n\nSilakan pesan lagi nanti. Terima kasih!'
       );
@@ -567,7 +667,7 @@ class MessageHandler {
     const order = queueItem.order;
 
     await this.sendOrderToDriverWithTimeout(driver, order);
-    await this.client.sendMessage(
+    await this.send(
       order.customer.chatId,
       `✅ Driver ditemukan untuk pesanan Anda (${order.orderNumber})!\n\nDriver akan segera menghubungi Anda.`
     );

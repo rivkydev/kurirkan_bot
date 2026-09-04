@@ -11,6 +11,7 @@ class WebServer {
     this.app = express();
     this.server = http.createServer(this.app);
     this.io = new Server(this.server, { cors: { origin: '*' } });
+    this.latestQR = null;
 
     this.setupMiddleware();
     this.setupRoutes();
@@ -23,6 +24,10 @@ class WebServer {
     this.app.use(express.static(path.join(__dirname, '../public')));
   }
 
+  setWhatsAppClient(client) {
+    this.waClient = client;
+  }
+
   setupRoutes() {
     // API Drivers
     this.app.get('/api/drivers', (req, res) => {
@@ -32,10 +37,16 @@ class WebServer {
     this.app.post('/api/drivers', (req, res) => {
       const { name, phone } = req.body;
       if (!name || !phone) return res.status(400).json({ error: 'Name and phone required' });
-      const driverId = `DRV${String(storage.drivers.size + 1).padStart(3, '0')}`;
-      const driver = storage.addDriver(driverId, name, phone);
-      res.json(driver);
+      
+      // Normalisasi nomor: +62 / 62 / 08 -> simpan as 08...
+      let cleanPhone = phone.replace(/[^0-9]/g, '');
+      if (cleanPhone.startsWith('62')) cleanPhone = '0' + cleanPhone.slice(2);
+
+      // Generate token aktivasi — driver harus ketik AKTIVASI <token> di grup
+      const token = storage.generateRegistrationToken(cleanPhone, name);
+      res.json({ success: true, name, phone: cleanPhone, token });
     });
+
 
     this.app.delete('/api/drivers/:id', (req, res) => {
       const driverId = req.params.id;
@@ -84,6 +95,83 @@ class WebServer {
         botConnected: storage.isBotConnected
       });
     });
+
+    // API Config
+    this.app.get('/api/config', (req, res) => {
+      res.json(storage.config);
+    });
+
+    this.app.post('/api/config', (req, res) => {
+      const { is24Hours, openTime, closeTime, attendanceGroups } = req.body;
+      storage.config = {
+        ...storage.config,
+        is24Hours: Boolean(is24Hours),
+        openTime: openTime || '08:00',
+        closeTime: closeTime || '22:00',
+        attendanceGroups: Array.isArray(attendanceGroups) ? attendanceGroups : []
+      };
+      storage.saveToFile();
+      res.json({ success: true, config: storage.config });
+    });
+
+    // API Groups
+    this.app.get('/api/groups', (req, res) => {
+      try {
+        const adminGroups = [];
+        const knownGroups = storage.config.knownGroups || {};
+        
+        // Loop semua grup yang udah terekam saat ada aktivitas chat
+        for (const [id, name] of Object.entries(knownGroups)) {
+          adminGroups.push({ id, name });
+        }
+        
+        res.json(adminGroups);
+      } catch (err) {
+        console.error('[DEBUG] /api/groups 500 Error:', err);
+        res.status(500).json({ error: err.message });
+      }
+    });
+
+    // API Create Group
+    this.app.post('/api/create-group', async (req, res) => {
+      if (!this.waClient) return res.status(503).json({ error: 'Bot belum terhubung ke WhatsApp' });
+      
+      const { groupName, participants } = req.body;
+      if (!groupName) return res.status(400).json({ error: 'Nama grup wajib diisi' });
+
+      try {
+        // Format nomor HP ke format WA: 08xxx -> 628xxx@c.us
+        const formattedParticipants = (participants || []).map(p => {
+          let num = p.replace(/[^0-9]/g, ''); // hapus semua non-angka
+          if (num.startsWith('0')) num = '62' + num.slice(1);
+          if (!num.startsWith('62')) num = '62' + num;
+          return num + '@c.us';
+        });
+
+        console.log(`📦 Creating group: ${groupName} with participants:`, formattedParticipants);
+        
+        const result = await this.waClient.createGroup(groupName, formattedParticipants);
+        const groupId = result.gid._serialized;
+
+        // Pastikan izin grup memperbolehkan semua user untuk mengirim pesan
+        try {
+          const chat = await this.waClient.getChatById(groupId);
+          if (chat.isGroup) {
+            await chat.setMessagesAdminsOnly(false); // false = all participants can send message
+          }
+        } catch (e) {
+          console.error('Gagal mengatur izin kirim pesan grup:', e);
+        }
+
+        // Catat ke knownGroups (Bot otomatis jadi admin karena dia yang buat grupnya)
+        storage.addKnownGroup(groupId, groupName);
+
+        res.json({ success: true, groupId, groupName });
+      } catch (err) {
+        console.error('❌ Gagal bikin grup:', err);
+        res.status(500).json({ error: err.message });
+      }
+    });
   }
 
   setupSocket() {
@@ -94,15 +182,20 @@ class WebServer {
         socket.emit('ready', { message: 'Ready' });
       } else {
         socket.emit('status', { message: 'Web Dashboard Connected (Waiting for WA)', isConnected: false });
+        if (this.latestQR) {
+            socket.emit('qr', this.latestQR);
+        }
       }
     });
   }
 
   emitQR(qr) {
+    this.latestQR = qr;
     this.io.emit('qr', qr);
   }
 
   emitReady(info) {
+    this.latestQR = null;
     this.io.emit('ready', info);
   }
 
